@@ -1,5 +1,12 @@
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 
 export default function HomeScreen() {
   return (
@@ -30,14 +37,19 @@ export default function HomeScreen() {
         </View>
 
         {/* Start Trip */}
-        <TouchableOpacity style={styles.startButton}>
+        <TouchableOpacity
+          style={styles.startButton}
+          onPress={() => router.push('/trip')}
+        >
           <Text style={styles.startIcon}>🛍️</Text>
+
           <View>
             <Text style={styles.startTitle}>Start Shopping Trip</Text>
             <Text style={styles.startSubtitle}>
               Scan products & compare prices
             </Text>
           </View>
+
           <Text style={styles.arrow}>›</Text>
         </TouchableOpacity>
 
@@ -77,6 +89,7 @@ export default function HomeScreen() {
           <View style={styles.stepNumber}>
             <Text style={styles.stepNumberText}>1</Text>
           </View>
+
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Scan a product</Text>
             <Text style={styles.stepDescription}>
@@ -89,6 +102,7 @@ export default function HomeScreen() {
           <View style={styles.stepNumber}>
             <Text style={styles.stepNumberText}>2</Text>
           </View>
+
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Enter store price</Text>
             <Text style={styles.stepDescription}>
@@ -101,6 +115,7 @@ export default function HomeScreen() {
           <View style={styles.stepNumber}>
             <Text style={styles.stepNumberText}>3</Text>
           </View>
+
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Compare & save</Text>
             <Text style={styles.stepDescription}>
