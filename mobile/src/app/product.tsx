@@ -11,6 +11,11 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  getCheapestPrice,
+  getPricesByBarcode,
+  RetailerPrice,
+} from '../services/priceService';
 
 export default function ProductScreen() {
   const params = useLocalSearchParams<{
@@ -26,11 +31,23 @@ export default function ProductScreen() {
   const [storePrice, setStorePrice] = useState('');
   const [priceSaved, setPriceSaved] = useState(false);
 
+  const barcode = params.barcode || '';
+
   const productName = params.productName || 'Unknown Product';
   const brand = params.brand || 'Unknown Brand';
   const category = params.category || 'Other';
   const weight = params.weight || '';
   const unit = params.unit || '';
+
+  const onlinePrices = getPricesByBarcode(barcode);
+  const cheapest = getCheapestPrice(onlinePrices);
+
+  const storePriceNumber = parseFloat(storePrice);
+
+  const savings =
+    !isNaN(storePriceNumber) && cheapest
+      ? Math.max(storePriceNumber - cheapest.price, 0)
+      : 0;
 
   const handleSavePrice = () => {
     if (!storePrice.trim()) {
@@ -101,7 +118,7 @@ export default function ProductScreen() {
             </Text>
 
             <Text style={styles.barcode}>
-              {params.barcode || 'Not available'}
+              {barcode || 'Not available'}
             </Text>
 
             {params.barcodeType ? (
@@ -145,60 +162,145 @@ export default function ProductScreen() {
             </View>
 
             <Text style={styles.priceHint}>
-              Example: Enter 75 if the product costs ₹75 at
+              Example: Enter 50 if the product costs ₹50 at
               your store.
             </Text>
           </View>
 
-          {/* Price Saved */}
-          {priceSaved ? (
-            <View style={styles.savedCard}>
-              <View style={styles.savedIcon}>
-                <Text style={styles.savedIconText}>✓</Text>
+          {/* Online Price Comparison */}
+          {onlinePrices.length > 0 ? (
+            <View style={styles.comparisonCard}>
+              <View style={styles.comparisonHeader}>
+                <View style={styles.comparisonTitleContainer}>
+                  <Text style={styles.sectionTitle}>
+                    Online Price Comparison
+                  </Text>
+
+                  <Text style={styles.sectionSubtitle}>
+                    Current demo prices for this MVP
+                  </Text>
+                </View>
+
+                <Text style={styles.comparisonIcon}>
+                  💰
+                </Text>
               </View>
 
-              <View style={styles.savedContent}>
-                <Text style={styles.savedTitle}>
-                  Store price saved
+              {onlinePrices.map(
+                (item: RetailerPrice, index: number) => {
+                  const isCheapest =
+                    cheapest?.retailer === item.retailer;
+
+                  return (
+                    <View
+                      key={item.retailer}
+                      style={[
+                        styles.retailerRow,
+                        index === onlinePrices.length - 1 &&
+                          styles.lastRetailerRow,
+                      ]}
+                    >
+                      <View style={styles.retailerInfo}>
+                        <View style={styles.retailerNameRow}>
+                          <Text style={styles.retailerName}>
+                            {item.retailer}
+                          </Text>
+
+                          {isCheapest ? (
+                            <View style={styles.cheapestBadge}>
+                              <Text style={styles.cheapestBadgeText}>
+                                CHEAPEST
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
+
+                        <Text style={styles.deliveryTime}>
+                          {item.deliveryTime}
+                        </Text>
+                      </View>
+
+                      <Text style={styles.retailerPrice}>
+                        ₹{item.price}
+                      </Text>
+                    </View>
+                  );
+                }
+              )}
+            </View>
+          ) : (
+            <View style={styles.noPricesCard}>
+              <Text style={styles.noPricesIcon}>🔎</Text>
+
+              <Text style={styles.noPricesTitle}>
+                No online prices yet
+              </Text>
+
+              <Text style={styles.noPricesText}>
+                We don't have comparison data for this product
+                yet.
+              </Text>
+            </View>
+          )}
+
+          {/* Savings */}
+          {priceSaved && cheapest ? (
+            <View style={styles.savingsCard}>
+              <Text style={styles.savingsEmoji}>🎉</Text>
+
+              <View style={styles.savingsContent}>
+                <Text style={styles.savingsLabel}>
+                  POTENTIAL SAVINGS
                 </Text>
 
-                <Text style={styles.savedText}>
-                  ShopTrip recorded ₹{storePrice} as the current
-                  store price.
+                <Text style={styles.savingsAmount}>
+                  ₹{savings.toFixed(2)}
                 </Text>
+
+                {savings > 0 ? (
+                  <Text style={styles.savingsText}>
+                    You could save by buying from{' '}
+                    {cheapest.retailer}.
+                  </Text>
+                ) : (
+                  <Text style={styles.savingsText}>
+                    The store price is already at or below our
+                    cheapest demo online price.
+                  </Text>
+                )}
               </View>
             </View>
           ) : null}
 
-          {/* Continue Button */}
+          {/* Save Price Button */}
           <TouchableOpacity
             style={[
               styles.continueButton,
-              !storePrice.trim() && styles.continueButtonDisabled,
+              !storePrice.trim() &&
+                styles.continueButtonDisabled,
             ]}
             onPress={handleSavePrice}
             disabled={!storePrice.trim()}
           >
             <Text style={styles.continueButtonText}>
               {priceSaved
-                ? 'Store Price Saved ✓'
-                : 'Save Store Price'}
+                ? 'Price Compared ✓'
+                : 'Compare Prices'}
             </Text>
           </TouchableOpacity>
 
-          {/* Coming Next */}
+          {/* Future */}
           <View style={styles.nextCard}>
-            <Text style={styles.nextIcon}>💰</Text>
+            <Text style={styles.nextIcon}>🛍️</Text>
 
             <View style={styles.nextContent}>
               <Text style={styles.nextTitle}>
-                Next: Compare Prices
+                Next: Add to Shopping Trip
               </Text>
 
               <Text style={styles.nextText}>
-                ShopTrip will compare this store price with
-                online prices and calculate your potential
-                savings.
+                After comparing prices, you will be able to add
+                this product to your current Shopping Trip.
               </Text>
             </View>
           </View>
@@ -438,10 +540,120 @@ const styles = StyleSheet.create({
     marginTop: 9,
   },
 
-  savedCard: {
+  comparisonCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 17,
-    padding: 15,
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#E3E5E8',
+    marginBottom: 14,
+  },
+
+  comparisonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+
+  comparisonTitleContainer: {
+    flex: 1,
+  },
+
+  comparisonIcon: {
+    fontSize: 27,
+    marginLeft: 10,
+  },
+
+  retailerRow: {
+    paddingVertical: 13,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ECEDEF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  lastRetailerRow: {
+    borderBottomWidth: 0,
+  },
+
+  retailerInfo: {
+    flex: 1,
+  },
+
+  retailerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+
+  retailerName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#111318',
+  },
+
+  deliveryTime: {
+    fontSize: 11,
+    color: '#8A8F97',
+    marginTop: 3,
+  },
+
+  cheapestBadge: {
+    backgroundColor: '#111318',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    marginLeft: 7,
+  },
+
+  cheapestBadgeText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+
+  retailerPrice: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#111318',
+    marginLeft: 12,
+  },
+
+  noPricesCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#E3E5E8',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+
+  noPricesIcon: {
+    fontSize: 28,
+    marginBottom: 8,
+  },
+
+  noPricesTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#111318',
+  },
+
+  noPricesText: {
+    fontSize: 12,
+    color: '#70757D',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+
+  savingsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
     borderWidth: 1,
     borderColor: '#E3E5E8',
     flexDirection: 'row',
@@ -449,37 +661,34 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
-  savedIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#111318',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 11,
+  savingsEmoji: {
+    fontSize: 34,
+    marginRight: 14,
   },
 
-  savedIconText: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '800',
-  },
-
-  savedContent: {
+  savingsContent: {
     flex: 1,
   },
 
-  savedTitle: {
-    fontSize: 14,
+  savingsLabel: {
+    fontSize: 9,
     fontWeight: '800',
-    color: '#111318',
+    color: '#8A8F97',
+    letterSpacing: 1,
   },
 
-  savedText: {
+  savingsAmount: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#111318',
+    marginTop: 2,
+  },
+
+  savingsText: {
     fontSize: 11,
     color: '#70757D',
-    marginTop: 3,
     lineHeight: 16,
+    marginTop: 3,
   },
 
   continueButton: {
