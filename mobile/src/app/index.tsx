@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import {
   ScrollView,
   StyleSheet,
@@ -6,7 +7,6 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
 
 export default function HomeScreen() {
   return (
@@ -43,7 +43,7 @@ export default function HomeScreen() {
         >
           <Text style={styles.startIcon}>🛍️</Text>
 
-          <View>
+          <View style={styles.startContent}>
             <Text style={styles.startTitle}>Start Shopping Trip</Text>
             <Text style={styles.startSubtitle}>
               Scan products & compare prices
@@ -57,24 +57,31 @@ export default function HomeScreen() {
         <Text style={styles.sectionTitle}>Quick Actions</Text>
 
         <View style={styles.actionGrid}>
-          <TouchableOpacity style={styles.actionCard}>
+          {/* Scan Product */}
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => router.push('/scan')}
+          >
             <Text style={styles.actionIcon}>📷</Text>
             <Text style={styles.actionTitle}>Scan Product</Text>
             <Text style={styles.actionSubtitle}>Photo or barcode</Text>
           </TouchableOpacity>
 
+          {/* My Savings */}
           <TouchableOpacity style={styles.actionCard}>
             <Text style={styles.actionIcon}>💰</Text>
             <Text style={styles.actionTitle}>My Savings</Text>
             <Text style={styles.actionSubtitle}>Track your savings</Text>
           </TouchableOpacity>
 
+          {/* Trip History */}
           <TouchableOpacity style={styles.actionCard}>
             <Text style={styles.actionIcon}>🧳</Text>
             <Text style={styles.actionTitle}>Trip History</Text>
             <Text style={styles.actionSubtitle}>View past trips</Text>
           </TouchableOpacity>
 
+          {/* Profile */}
           <TouchableOpacity style={styles.actionCard}>
             <Text style={styles.actionIcon}>👤</Text>
             <Text style={styles.actionTitle}>Profile</Text>
@@ -216,6 +223,10 @@ const styles = StyleSheet.create({
   startIcon: {
     fontSize: 30,
     marginRight: 14,
+  },
+
+  startContent: {
+    flex: 1,
   },
 
   startTitle: {

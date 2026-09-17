@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -5,7 +6,6 @@ export default function TripScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-
         {/* Header */}
         <View style={styles.header}>
           <View>
@@ -34,10 +34,13 @@ export default function TripScreen() {
         </View>
 
         {/* Scan Button */}
-        <TouchableOpacity style={styles.scanButton}>
+        <TouchableOpacity
+          style={styles.scanButton}
+          onPress={() => router.push('/scan')}
+        >
           <Text style={styles.scanIcon}>📷</Text>
 
-          <View>
+          <View style={styles.scanContent}>
             <Text style={styles.scanTitle}>Scan Product</Text>
             <Text style={styles.scanSubtitle}>
               Scan barcode or take a photo
@@ -52,7 +55,9 @@ export default function TripScreen() {
 
         <View style={styles.emptyCard}>
           <Text style={styles.emptyIcon}>🛒</Text>
+
           <Text style={styles.emptyTitle}>No products yet</Text>
+
           <Text style={styles.emptyText}>
             Scan your first product to start comparing prices.
           </Text>
@@ -60,9 +65,10 @@ export default function TripScreen() {
 
         {/* Finish Trip */}
         <TouchableOpacity style={styles.finishButton}>
-          <Text style={styles.finishButtonText}>Finish Shopping Trip</Text>
+          <Text style={styles.finishButtonText}>
+            Finish Shopping Trip
+          </Text>
         </TouchableOpacity>
-
       </View>
     </SafeAreaView>
   );
@@ -161,6 +167,10 @@ const styles = StyleSheet.create({
   scanIcon: {
     fontSize: 30,
     marginRight: 14,
+  },
+
+  scanContent: {
+    flex: 1,
   },
 
   scanTitle: {
