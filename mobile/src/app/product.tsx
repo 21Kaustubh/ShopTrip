@@ -28,15 +28,10 @@ export default function ProductScreen() {
     unit?: string;
   }>();
 
-  const {
-    addProduct,
-    products,
-  } = useTrip();
+  const { addProduct } = useTrip();
 
   const barcode = String(params.barcode ?? '');
-  const productName = String(
-    params.productName ?? 'Unknown Product'
-  );
+  const productName = String(params.productName ?? 'Unknown Product');
   const brand = String(params.brand ?? '');
   const category = String(params.category ?? '');
   const weight = String(params.weight ?? '');
@@ -44,30 +39,20 @@ export default function ProductScreen() {
 
   const [storePrice, setStorePrice] = useState('');
   const [prices, setPrices] = useState<RetailerPrice[]>([]);
+  const [selectedRetailer, setSelectedRetailer] =
+    useState<RetailerPrice | null>(null);
   const [priceCompared, setPriceCompared] = useState(false);
   const [addedToTrip, setAddedToTrip] = useState(false);
 
   const storePriceNumber = Number(storePrice);
-
   const cheapestPrice = getCheapestPrice(prices);
 
   const savings =
     priceCompared &&
-    cheapestPrice &&
-    storePriceNumber > cheapestPrice.price
-      ? storePriceNumber - cheapestPrice.price
+    selectedRetailer &&
+    storePriceNumber > selectedRetailer.price
+      ? storePriceNumber - selectedRetailer.price
       : 0;
-
-  /*
-   * ================================
-   * COMPARE PRICES
-   * ================================
-   *
-   * Can be triggered by:
-   *
-   * 1. Clicking Compare Prices
-   * 2. Pressing Enter / Done in MRP field
-   */
 
   const comparePrices = () => {
     if (
@@ -79,22 +64,21 @@ export default function ProductScreen() {
         'Enter Store Price',
         'Please enter the price you see in the physical store.'
       );
-
       return;
     }
 
     const result = getPricesByBarcode(barcode);
 
     setPrices(result);
+    setSelectedRetailer(getCheapestPrice(result));
     setPriceCompared(true);
     setAddedToTrip(false);
   };
 
-  /*
-   * ================================
-   * ADD TO SHOPPING TRIP
-   * ================================
-   */
+  const selectRetailer = (retailer: RetailerPrice) => {
+    setSelectedRetailer(retailer);
+    setAddedToTrip(false);
+  };
 
   const addToShoppingTrip = () => {
     if (!priceCompared) {
@@ -102,22 +86,17 @@ export default function ProductScreen() {
         'Compare Prices First',
         'Please compare prices before adding this product.'
       );
-
       return;
     }
 
-    if (!cheapestPrice) {
+    if (!selectedRetailer) {
       Alert.alert(
-        'No Online Price',
-        'No online comparison price is available for this product.'
+        'Select a Retailer',
+        'Please select where you want to buy this product.'
       );
-
       return;
     }
 
-    /*
-     * Prevent accidental duplicate button presses.
-     */
     if (addedToTrip) {
       return;
     }
@@ -131,33 +110,18 @@ export default function ProductScreen() {
       weight,
       unit,
       storePrice: storePriceNumber,
-      onlinePrice: cheapestPrice.price,
-      cheapestRetailer: cheapestPrice.retailer,
+      onlinePrice: selectedRetailer.price,
+      cheapestRetailer: selectedRetailer.retailer,
       savings,
       quantity: 1,
     });
 
-    /*
-     * Change the UI immediately after adding.
-     */
     setAddedToTrip(true);
   };
-
-  /*
-   * ================================
-   * VIEW SHOPPING TRIP
-   * ================================
-   */
 
   const viewShoppingTrip = () => {
     router.replace('/trip');
   };
-
-  /*
-   * ================================
-   * SCAN ANOTHER PRODUCT
-   * ================================
-   */
 
   const scanAnotherProduct = () => {
     router.push('/scan');
@@ -165,10 +129,6 @@ export default function ProductScreen() {
 
   return (
     <View style={styles.screen}>
-      {/* ========================= */}
-      {/* HEADER */}
-      {/* ========================= */}
-
       <View style={styles.header}>
         <Pressable
           style={({ pressed }) => [
@@ -183,10 +143,7 @@ export default function ProductScreen() {
         </Pressable>
 
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>
-            Product Details
-          </Text>
-
+          <Text style={styles.headerTitle}>Product Details</Text>
           <Text style={styles.headerSubtitle}>
             ShopTrip Price Comparison
           </Text>
@@ -200,31 +157,17 @@ export default function ProductScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* ========================= */}
-        {/* PRODUCT */}
-        {/* ========================= */}
-
         <View style={styles.card}>
-          <Text style={styles.sectionLabel}>
-            PRODUCT
-          </Text>
+          <Text style={styles.sectionLabel}>PRODUCT</Text>
 
-          <Text style={styles.productName}>
-            {productName}
-          </Text>
+          <Text style={styles.productName}>{productName}</Text>
 
-          {brand ? (
-            <Text style={styles.brand}>
-              {brand}
-            </Text>
-          ) : null}
+          {brand ? <Text style={styles.brand}>{brand}</Text> : null}
 
           <View style={styles.infoRow}>
             {category ? (
               <View style={styles.infoBadge}>
-                <Text style={styles.infoBadgeText}>
-                  {category}
-                </Text>
+                <Text style={styles.infoBadgeText}>{category}</Text>
               </View>
             ) : null}
 
@@ -238,51 +181,28 @@ export default function ProductScreen() {
           </View>
         </View>
 
-        {/* ========================= */}
-        {/* BARCODE */}
-        {/* ========================= */}
-
         <View style={styles.card}>
-          <Text style={styles.sectionLabel}>
-            BARCODE
-          </Text>
-
-          <Text style={styles.barcode}>
-            {barcode}
-          </Text>
-
-          <Text style={styles.barcodeType}>
-            EAN13
-          </Text>
+          <Text style={styles.sectionLabel}>BARCODE</Text>
+          <Text style={styles.barcode}>{barcode}</Text>
+          <Text style={styles.barcodeType}>EAN13</Text>
         </View>
-
-        {/* ========================= */}
-        {/* STORE PRICE */}
-        {/* ========================= */}
 
         <View style={styles.card}>
           <View style={styles.sectionHeaderRow}>
             <View>
-              <Text style={styles.cardTitle}>
-                Your Store Price
-              </Text>
-
+              <Text style={styles.cardTitle}>Your Store Price</Text>
               <Text style={styles.cardDescription}>
                 Enter the price you see in the physical store
               </Text>
             </View>
 
             <View style={styles.rupeeCircle}>
-              <Text style={styles.rupeeText}>
-                ₹
-              </Text>
+              <Text style={styles.rupeeText}>₹</Text>
             </View>
           </View>
 
           <View style={styles.priceInputContainer}>
-            <Text style={styles.inputRupee}>
-              ₹
-            </Text>
+            <Text style={styles.inputRupee}>₹</Text>
 
             <TextInput
               style={styles.priceInput}
@@ -290,6 +210,7 @@ export default function ProductScreen() {
               onChangeText={(value) => {
                 setStorePrice(value);
                 setPriceCompared(false);
+                setSelectedRetailer(null);
                 setAddedToTrip(false);
               }}
               placeholder="0"
@@ -305,26 +226,19 @@ export default function ProductScreen() {
           </Text>
         </View>
 
-        {/* ========================= */}
-        {/* ONLINE COMPARISON */}
-        {/* ========================= */}
-
-        {priceCompared && (
+        {priceCompared ? (
           <View style={styles.card}>
             <View style={styles.sectionHeaderRow}>
-              <View>
+              <View style={styles.comparisonHeaderText}>
                 <Text style={styles.cardTitle}>
                   Online Price Comparison
                 </Text>
-
                 <Text style={styles.cardDescription}>
-                  Current demo prices for this MVP
+                  Current demo prices • Tap a retailer to select it
                 </Text>
               </View>
 
-              <Text style={styles.moneyEmoji}>
-                💰
-              </Text>
+              <Text style={styles.moneyEmoji}>💰</Text>
             </View>
 
             {prices.length === 0 ? (
@@ -332,7 +246,6 @@ export default function ProductScreen() {
                 <Text style={styles.noPricesTitle}>
                   No online prices found
                 </Text>
-
                 <Text style={styles.noPricesText}>
                   We don't have comparison data for this product yet.
                 </Text>
@@ -340,17 +253,24 @@ export default function ProductScreen() {
             ) : (
               prices.map((item, index) => {
                 const isCheapest =
-                  cheapestPrice?.retailer ===
-                    item.retailer &&
+                  cheapestPrice?.retailer === item.retailer &&
                   cheapestPrice?.price === item.price;
 
+                const isSelected =
+                  selectedRetailer?.retailer === item.retailer &&
+                  selectedRetailer?.price === item.price;
+
                 return (
-                  <View
+                  <Pressable
                     key={`${item.retailer}-${index}`}
-                    style={[
+                    onPress={() => selectRetailer(item)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Select ${item.retailer}`}
+                    style={({ pressed }) => [
                       styles.retailerRow,
-                      index === prices.length - 1 &&
-                        styles.lastRetailerRow,
+                      index === prices.length - 1 && styles.lastRetailerRow,
+                      isSelected && styles.selectedRetailerRow,
+                      pressed && styles.buttonPressed,
                     ]}
                   >
                     <View style={styles.retailerLeft}>
@@ -359,13 +279,21 @@ export default function ProductScreen() {
                           {item.retailer}
                         </Text>
 
-                        {isCheapest && (
+                        {isSelected ? (
+                          <View style={styles.selectedBadge}>
+                            <Text style={styles.selectedText}>
+                              SELECTED
+                            </Text>
+                          </View>
+                        ) : null}
+
+                        {isCheapest ? (
                           <View style={styles.cheapestBadge}>
                             <Text style={styles.cheapestText}>
                               CHEAPEST
                             </Text>
                           </View>
-                        )}
+                        ) : null}
                       </View>
 
                       <Text style={styles.deliveryTime}>
@@ -373,48 +301,41 @@ export default function ProductScreen() {
                       </Text>
                     </View>
 
-                    <Text style={styles.retailerPrice}>
-                      ₹{item.price}
-                    </Text>
-                  </View>
+                    <View style={styles.retailerRight}>
+                      <Text style={styles.retailerPrice}>
+                        ₹{item.price}
+                      </Text>
+                      <Text style={styles.selectHint}>
+                        {isSelected ? 'Selected' : 'Tap to select'}
+                      </Text>
+                    </View>
+                  </Pressable>
                 );
               })
             )}
           </View>
-        )}
+        ) : null}
 
-        {/* ========================= */}
-        {/* SAVINGS */}
-        {/* ========================= */}
-
-        {priceCompared && cheapestPrice && (
+        {priceCompared && selectedRetailer ? (
           <View style={styles.savingsCard}>
-            <Text style={styles.savingsEmoji}>
-              🎉
-            </Text>
+            <Text style={styles.savingsEmoji}>🎉</Text>
 
             <View style={styles.savingsContent}>
-              <Text style={styles.savingsLabel}>
-                POTENTIAL SAVINGS
-              </Text>
+              <Text style={styles.savingsLabel}>SELECTED OPTION</Text>
 
               <Text style={styles.savingsAmount}>
                 ₹{savings.toFixed(2)}
               </Text>
 
               <Text style={styles.savingsDescription}>
-                You could save by buying from{' '}
-                {cheapestPrice.retailer}.
+                Potential savings with {selectedRetailer.retailer} at ₹
+                {selectedRetailer.price}.
               </Text>
             </View>
           </View>
-        )}
+        ) : null}
 
-        {/* ========================= */}
-        {/* ACTION BUTTONS */}
-        {/* ========================= */}
-
-        {!priceCompared && (
+        {!priceCompared ? (
           <Pressable
             style={({ pressed }) => [
               styles.primaryButton,
@@ -424,13 +345,11 @@ export default function ProductScreen() {
             accessibilityRole="button"
             accessibilityLabel="Compare prices"
           >
-            <Text style={styles.primaryButtonText}>
-              Compare Prices
-            </Text>
+            <Text style={styles.primaryButtonText}>Compare Prices</Text>
           </Pressable>
-        )}
+        ) : null}
 
-        {priceCompared && !addedToTrip && (
+        {priceCompared && !addedToTrip ? (
           <Pressable
             style={({ pressed }) => [
               styles.primaryButton,
@@ -444,13 +363,9 @@ export default function ProductScreen() {
               🛒 Add to Shopping Trip
             </Text>
           </Pressable>
-        )}
+        ) : null}
 
-        {/* ========================= */}
-        {/* ADDED TO TRIP */}
-        {/* ========================= */}
-
-        {addedToTrip && (
+        {addedToTrip ? (
           <View style={styles.addedSection}>
             <View style={styles.addedBanner}>
               <Text style={styles.addedBannerText}>
@@ -472,25 +387,16 @@ export default function ProductScreen() {
               </Text>
             </Pressable>
           </View>
-        )}
+        ) : null}
 
-        {/* ========================= */}
-        {/* CONTINUE SHOPPING */}
-        {/* ========================= */}
-
-        {addedToTrip && (
+        {addedToTrip ? (
           <View style={styles.continueCard}>
-            <Text style={styles.continueEmoji}>
-              📷
-            </Text>
+            <Text style={styles.continueEmoji}>📷</Text>
 
-            <Text style={styles.continueTitle}>
-              Continue Shopping
-            </Text>
+            <Text style={styles.continueTitle}>Continue Shopping</Text>
 
             <Text style={styles.continueDescription}>
-              Scan another product to continue your current
-              shopping trip.
+              Scan another product to continue your current shopping trip.
             </Text>
 
             <Pressable
@@ -507,15 +413,11 @@ export default function ProductScreen() {
               </Text>
             </Pressable>
           </View>
-        )}
+        ) : null}
       </ScrollView>
     </View>
   );
 }
-
-/* ================================= */
-/* STYLES */
-/* ================================= */
 
 const styles = StyleSheet.create({
   screen: {
@@ -645,6 +547,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
+  comparisonHeaderText: {
+    flex: 1,
+    marginRight: 12,
+  },
+
   cardTitle: {
     fontSize: 16,
     fontWeight: '800',
@@ -711,12 +618,19 @@ const styles = StyleSheet.create({
   },
 
   retailerRow: {
-    minHeight: 64,
+    minHeight: 70,
     borderBottomWidth: 1,
     borderBottomColor: '#ededee',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+
+  selectedRetailerRow: {
+    backgroundColor: '#f0f0f2',
+    borderRadius: 10,
+    paddingHorizontal: 10,
   },
 
   lastRetailerRow: {
@@ -727,16 +641,35 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
+  retailerRight: {
+    alignItems: 'flex-end',
+    marginLeft: 12,
+  },
+
   retailerNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
+    flexWrap: 'wrap',
   },
 
   retailerName: {
     fontSize: 13,
     fontWeight: '800',
     color: '#111217',
+  },
+
+  selectedBadge: {
+    backgroundColor: '#111217',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 5,
+  },
+
+  selectedText: {
+    fontSize: 7,
+    fontWeight: '900',
+    color: '#ffffff',
   },
 
   cheapestBadge: {
@@ -762,6 +695,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     color: '#111217',
+  },
+
+  selectHint: {
+    marginTop: 3,
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#777982',
   },
 
   noPrices: {
