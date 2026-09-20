@@ -9,19 +9,19 @@ export type Product = {
 
 const products: Product[] = [
   {
-    barcode: '7622202852565',
-    productName: 'Oreo',
-    brand: 'Oreo',
-    category: 'Biscuits',
-    weight: '116.9',
-    unit: 'g',
+    barcode: '8901030974625',
+    productName: 'BRU Instant Coffee – New Rich Aroma',
+    brand: 'BRU',
+    category: 'Coffee',
+    weight: '',
+    unit: '',
   },
   {
-    barcode: '8908000737020',
-    productName: 'Mumbai Chana',
-    brand: 'Rajlaxmi',
-    category: 'Pulses',
-    weight: '200',
+    barcode: '8909106048553',
+    productName: 'Knorr Tomato Chatpata Cup-a-Soup',
+    brand: 'Knorr',
+    category: 'Instant Soup',
+    weight: '13.5',
     unit: 'g',
   },
 ];
@@ -34,4 +34,40 @@ export function getProductByBarcode(
   );
 
   return product ?? null;
+}
+
+/*
+ * SEARCH PRODUCTS
+ *
+ * Searches through:
+ * - Product name
+ * - Brand
+ * - Category
+ * - Barcode
+ */
+export function searchProducts(
+  query: string
+): Product[] {
+  const searchQuery = query
+    .trim()
+    .toLowerCase();
+
+  if (!searchQuery) {
+    return [];
+  }
+
+  return products.filter((product) => {
+    return (
+      product.productName
+        .toLowerCase()
+        .includes(searchQuery) ||
+      product.brand
+        .toLowerCase()
+        .includes(searchQuery) ||
+      product.category
+        .toLowerCase()
+        .includes(searchQuery) ||
+      product.barcode.includes(searchQuery)
+    );
+  });
 }

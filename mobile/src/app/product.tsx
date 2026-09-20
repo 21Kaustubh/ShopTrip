@@ -1,26 +1,26 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
+  Alert,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+
 import {
   getCheapestPrice,
   getPricesByBarcode,
-  RetailerPrice,
+  type RetailerPrice,
 } from '../services/priceService';
+
+import { useTrip } from '../context/TripContext';
 
 export default function ProductScreen() {
   const params = useLocalSearchParams<{
     barcode?: string;
-    barcodeType?: string;
     productName?: string;
     brand?: string;
     category?: string;
@@ -28,547 +28,692 @@ export default function ProductScreen() {
     unit?: string;
   }>();
 
+  const {
+    addProduct,
+    products,
+  } = useTrip();
+
+  const barcode = String(params.barcode ?? '');
+  const productName = String(
+    params.productName ?? 'Unknown Product'
+  );
+  const brand = String(params.brand ?? '');
+  const category = String(params.category ?? '');
+  const weight = String(params.weight ?? '');
+  const unit = String(params.unit ?? '');
+
   const [storePrice, setStorePrice] = useState('');
-  const [priceSaved, setPriceSaved] = useState(false);
+  const [prices, setPrices] = useState<RetailerPrice[]>([]);
+  const [priceCompared, setPriceCompared] = useState(false);
+  const [addedToTrip, setAddedToTrip] = useState(false);
 
-  const barcode = params.barcode || '';
+  const storePriceNumber = Number(storePrice);
 
-  const productName = params.productName || 'Unknown Product';
-  const brand = params.brand || 'Unknown Brand';
-  const category = params.category || 'Other';
-  const weight = params.weight || '';
-  const unit = params.unit || '';
-
-  const onlinePrices = getPricesByBarcode(barcode);
-  const cheapest = getCheapestPrice(onlinePrices);
-
-  const storePriceNumber = parseFloat(storePrice);
+  const cheapestPrice = getCheapestPrice(prices);
 
   const savings =
-    !isNaN(storePriceNumber) && cheapest
-      ? Math.max(storePriceNumber - cheapest.price, 0)
+    priceCompared &&
+    cheapestPrice &&
+    storePriceNumber > cheapestPrice.price
+      ? storePriceNumber - cheapestPrice.price
       : 0;
 
-  const handleSavePrice = () => {
-    if (!storePrice.trim()) {
+  /*
+   * ================================
+   * COMPARE PRICES
+   * ================================
+   *
+   * Can be triggered by:
+   *
+   * 1. Clicking Compare Prices
+   * 2. Pressing Enter / Done in MRP field
+   */
+
+  const comparePrices = () => {
+    if (
+      !storePrice.trim() ||
+      Number.isNaN(storePriceNumber) ||
+      storePriceNumber <= 0
+    ) {
+      Alert.alert(
+        'Enter Store Price',
+        'Please enter the price you see in the physical store.'
+      );
+
       return;
     }
 
-    setPriceSaved(true);
+    const result = getPricesByBarcode(barcode);
+
+    setPrices(result);
+    setPriceCompared(true);
+    setAddedToTrip(false);
+  };
+
+  /*
+   * ================================
+   * ADD TO SHOPPING TRIP
+   * ================================
+   */
+
+  const addToShoppingTrip = () => {
+    if (!priceCompared) {
+      Alert.alert(
+        'Compare Prices First',
+        'Please compare prices before adding this product.'
+      );
+
+      return;
+    }
+
+    if (!cheapestPrice) {
+      Alert.alert(
+        'No Online Price',
+        'No online comparison price is available for this product.'
+      );
+
+      return;
+    }
+
+    /*
+     * Prevent accidental duplicate button presses.
+     */
+    if (addedToTrip) {
+      return;
+    }
+
+    addProduct({
+      id: `${barcode}-${Date.now()}`,
+      barcode,
+      productName,
+      brand,
+      category,
+      weight,
+      unit,
+      storePrice: storePriceNumber,
+      onlinePrice: cheapestPrice.price,
+      cheapestRetailer: cheapestPrice.retailer,
+      savings,
+      quantity: 1,
+    });
+
+    /*
+     * Change the UI immediately after adding.
+     */
+    setAddedToTrip(true);
+  };
+
+  /*
+   * ================================
+   * VIEW SHOPPING TRIP
+   * ================================
+   */
+
+  const viewShoppingTrip = () => {
+    router.replace('/trip');
+  };
+
+  /*
+   * ================================
+   * SCAN ANOTHER PRODUCT
+   * ================================
+   */
+
+  const scanAnotherProduct = () => {
+    router.push('/scan');
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={styles.keyboardContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
+    <View style={styles.screen}>
+      {/* ========================= */}
+      {/* HEADER */}
+      {/* ========================= */}
+
+      <View style={styles.header}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.backButton,
+            pressed && styles.buttonPressed,
+          ]}
+          onPress={() => router.replace('/scan')}
+          accessibilityRole="button"
+          accessibilityLabel="Go back to scanner"
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.back()}
-            >
-              <Text style={styles.backIcon}>‹</Text>
-            </TouchableOpacity>
+          <Text style={styles.backText}>‹</Text>
+        </Pressable>
 
-            <View style={styles.headerText}>
-              <Text style={styles.label}>SHOPTRIP</Text>
-              <Text style={styles.title}>Product Details</Text>
-            </View>
-          </View>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>
+            Product Details
+          </Text>
 
-          {/* Product Card */}
-          <View style={styles.productCard}>
-            <View style={styles.productIconContainer}>
-              <Text style={styles.productIcon}>🛒</Text>
-            </View>
+          <Text style={styles.headerSubtitle}>
+            ShopTrip Price Comparison
+          </Text>
+        </View>
 
-            <View style={styles.productInfo}>
-              <Text style={styles.productCategory}>
-                {category.toUpperCase()}
-              </Text>
+        <View style={styles.headerSpacer} />
+      </View>
 
-              <Text style={styles.productName}>
-                {productName}
-              </Text>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* ========================= */}
+        {/* PRODUCT */}
+        {/* ========================= */}
 
-              <Text style={styles.brand}>
-                {brand}
-              </Text>
+        <View style={styles.card}>
+          <Text style={styles.sectionLabel}>
+            PRODUCT
+          </Text>
 
-              {weight && unit ? (
-                <View style={styles.weightBadge}>
-                  <Text style={styles.weightText}>
-                    {weight} {unit}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          </View>
+          <Text style={styles.productName}>
+            {productName}
+          </Text>
 
-          {/* Barcode */}
-          <View style={styles.infoCard}>
-            <Text style={styles.sectionLabel}>
-              BARCODE
+          {brand ? (
+            <Text style={styles.brand}>
+              {brand}
             </Text>
-
-            <Text style={styles.barcode}>
-              {barcode || 'Not available'}
-            </Text>
-
-            {params.barcodeType ? (
-              <Text style={styles.barcodeType}>
-                {params.barcodeType.toUpperCase()}
-              </Text>
-            ) : null}
-          </View>
-
-          {/* Store Price */}
-          <View style={styles.priceCard}>
-            <View style={styles.priceHeader}>
-              <View>
-                <Text style={styles.sectionTitle}>
-                  Your Store Price
-                </Text>
-
-                <Text style={styles.sectionSubtitle}>
-                  Enter the price you see in the physical store
-                </Text>
-              </View>
-
-              <Text style={styles.priceIcon}>₹</Text>
-            </View>
-
-            <View style={styles.priceInputContainer}>
-              <Text style={styles.rupeeSymbol}>₹</Text>
-
-              <TextInput
-                style={styles.priceInput}
-                value={storePrice}
-                onChangeText={(text) => {
-                  setStorePrice(text);
-                  setPriceSaved(false);
-                }}
-                placeholder="0.00"
-                placeholderTextColor="#A0A4AA"
-                keyboardType="decimal-pad"
-                returnKeyType="done"
-              />
-            </View>
-
-            <Text style={styles.priceHint}>
-              Example: Enter 50 if the product costs ₹50 at
-              your store.
-            </Text>
-          </View>
-
-          {/* Online Price Comparison */}
-          {onlinePrices.length > 0 ? (
-            <View style={styles.comparisonCard}>
-              <View style={styles.comparisonHeader}>
-                <View style={styles.comparisonTitleContainer}>
-                  <Text style={styles.sectionTitle}>
-                    Online Price Comparison
-                  </Text>
-
-                  <Text style={styles.sectionSubtitle}>
-                    Current demo prices for this MVP
-                  </Text>
-                </View>
-
-                <Text style={styles.comparisonIcon}>
-                  💰
-                </Text>
-              </View>
-
-              {onlinePrices.map(
-                (item: RetailerPrice, index: number) => {
-                  const isCheapest =
-                    cheapest?.retailer === item.retailer;
-
-                  return (
-                    <View
-                      key={item.retailer}
-                      style={[
-                        styles.retailerRow,
-                        index === onlinePrices.length - 1 &&
-                          styles.lastRetailerRow,
-                      ]}
-                    >
-                      <View style={styles.retailerInfo}>
-                        <View style={styles.retailerNameRow}>
-                          <Text style={styles.retailerName}>
-                            {item.retailer}
-                          </Text>
-
-                          {isCheapest ? (
-                            <View style={styles.cheapestBadge}>
-                              <Text style={styles.cheapestBadgeText}>
-                                CHEAPEST
-                              </Text>
-                            </View>
-                          ) : null}
-                        </View>
-
-                        <Text style={styles.deliveryTime}>
-                          {item.deliveryTime}
-                        </Text>
-                      </View>
-
-                      <Text style={styles.retailerPrice}>
-                        ₹{item.price}
-                      </Text>
-                    </View>
-                  );
-                }
-              )}
-            </View>
-          ) : (
-            <View style={styles.noPricesCard}>
-              <Text style={styles.noPricesIcon}>🔎</Text>
-
-              <Text style={styles.noPricesTitle}>
-                No online prices yet
-              </Text>
-
-              <Text style={styles.noPricesText}>
-                We don't have comparison data for this product
-                yet.
-              </Text>
-            </View>
-          )}
-
-          {/* Savings */}
-          {priceSaved && cheapest ? (
-            <View style={styles.savingsCard}>
-              <Text style={styles.savingsEmoji}>🎉</Text>
-
-              <View style={styles.savingsContent}>
-                <Text style={styles.savingsLabel}>
-                  POTENTIAL SAVINGS
-                </Text>
-
-                <Text style={styles.savingsAmount}>
-                  ₹{savings.toFixed(2)}
-                </Text>
-
-                {savings > 0 ? (
-                  <Text style={styles.savingsText}>
-                    You could save by buying from{' '}
-                    {cheapest.retailer}.
-                  </Text>
-                ) : (
-                  <Text style={styles.savingsText}>
-                    The store price is already at or below our
-                    cheapest demo online price.
-                  </Text>
-                )}
-              </View>
-            </View>
           ) : null}
 
-          {/* Save Price Button */}
-          <TouchableOpacity
-            style={[
-              styles.continueButton,
-              !storePrice.trim() &&
-                styles.continueButtonDisabled,
-            ]}
-            onPress={handleSavePrice}
-            disabled={!storePrice.trim()}
-          >
-            <Text style={styles.continueButtonText}>
-              {priceSaved
-                ? 'Price Compared ✓'
-                : 'Compare Prices'}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.infoRow}>
+            {category ? (
+              <View style={styles.infoBadge}>
+                <Text style={styles.infoBadgeText}>
+                  {category}
+                </Text>
+              </View>
+            ) : null}
 
-          {/* Future */}
-          <View style={styles.nextCard}>
-            <Text style={styles.nextIcon}>🛍️</Text>
+            {weight ? (
+              <View style={styles.infoBadge}>
+                <Text style={styles.infoBadgeText}>
+                  {weight} {unit}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
 
-            <View style={styles.nextContent}>
-              <Text style={styles.nextTitle}>
-                Next: Add to Shopping Trip
+        {/* ========================= */}
+        {/* BARCODE */}
+        {/* ========================= */}
+
+        <View style={styles.card}>
+          <Text style={styles.sectionLabel}>
+            BARCODE
+          </Text>
+
+          <Text style={styles.barcode}>
+            {barcode}
+          </Text>
+
+          <Text style={styles.barcodeType}>
+            EAN13
+          </Text>
+        </View>
+
+        {/* ========================= */}
+        {/* STORE PRICE */}
+        {/* ========================= */}
+
+        <View style={styles.card}>
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <Text style={styles.cardTitle}>
+                Your Store Price
               </Text>
 
-              <Text style={styles.nextText}>
-                After comparing prices, you will be able to add
-                this product to your current Shopping Trip.
+              <Text style={styles.cardDescription}>
+                Enter the price you see in the physical store
+              </Text>
+            </View>
+
+            <View style={styles.rupeeCircle}>
+              <Text style={styles.rupeeText}>
+                ₹
               </Text>
             </View>
           </View>
 
-          <View style={styles.bottomSpace} />
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          <View style={styles.priceInputContainer}>
+            <Text style={styles.inputRupee}>
+              ₹
+            </Text>
+
+            <TextInput
+              style={styles.priceInput}
+              value={storePrice}
+              onChangeText={(value) => {
+                setStorePrice(value);
+                setPriceCompared(false);
+                setAddedToTrip(false);
+              }}
+              placeholder="0"
+              placeholderTextColor="#888"
+              keyboardType="decimal-pad"
+              returnKeyType="done"
+              onSubmitEditing={comparePrices}
+            />
+          </View>
+
+          <Text style={styles.exampleText}>
+            Press Enter / Done to compare prices.
+          </Text>
+        </View>
+
+        {/* ========================= */}
+        {/* ONLINE COMPARISON */}
+        {/* ========================= */}
+
+        {priceCompared && (
+          <View style={styles.card}>
+            <View style={styles.sectionHeaderRow}>
+              <View>
+                <Text style={styles.cardTitle}>
+                  Online Price Comparison
+                </Text>
+
+                <Text style={styles.cardDescription}>
+                  Current demo prices for this MVP
+                </Text>
+              </View>
+
+              <Text style={styles.moneyEmoji}>
+                💰
+              </Text>
+            </View>
+
+            {prices.length === 0 ? (
+              <View style={styles.noPrices}>
+                <Text style={styles.noPricesTitle}>
+                  No online prices found
+                </Text>
+
+                <Text style={styles.noPricesText}>
+                  We don't have comparison data for this product yet.
+                </Text>
+              </View>
+            ) : (
+              prices.map((item, index) => {
+                const isCheapest =
+                  cheapestPrice?.retailer ===
+                    item.retailer &&
+                  cheapestPrice?.price === item.price;
+
+                return (
+                  <View
+                    key={`${item.retailer}-${index}`}
+                    style={[
+                      styles.retailerRow,
+                      index === prices.length - 1 &&
+                        styles.lastRetailerRow,
+                    ]}
+                  >
+                    <View style={styles.retailerLeft}>
+                      <View style={styles.retailerNameRow}>
+                        <Text style={styles.retailerName}>
+                          {item.retailer}
+                        </Text>
+
+                        {isCheapest && (
+                          <View style={styles.cheapestBadge}>
+                            <Text style={styles.cheapestText}>
+                              CHEAPEST
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <Text style={styles.deliveryTime}>
+                        {item.deliveryTime}
+                      </Text>
+                    </View>
+
+                    <Text style={styles.retailerPrice}>
+                      ₹{item.price}
+                    </Text>
+                  </View>
+                );
+              })
+            )}
+          </View>
+        )}
+
+        {/* ========================= */}
+        {/* SAVINGS */}
+        {/* ========================= */}
+
+        {priceCompared && cheapestPrice && (
+          <View style={styles.savingsCard}>
+            <Text style={styles.savingsEmoji}>
+              🎉
+            </Text>
+
+            <View style={styles.savingsContent}>
+              <Text style={styles.savingsLabel}>
+                POTENTIAL SAVINGS
+              </Text>
+
+              <Text style={styles.savingsAmount}>
+                ₹{savings.toFixed(2)}
+              </Text>
+
+              <Text style={styles.savingsDescription}>
+                You could save by buying from{' '}
+                {cheapestPrice.retailer}.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* ========================= */}
+        {/* ACTION BUTTONS */}
+        {/* ========================= */}
+
+        {!priceCompared && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={comparePrices}
+            accessibilityRole="button"
+            accessibilityLabel="Compare prices"
+          >
+            <Text style={styles.primaryButtonText}>
+              Compare Prices
+            </Text>
+          </Pressable>
+        )}
+
+        {priceCompared && !addedToTrip && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={addToShoppingTrip}
+            accessibilityRole="button"
+            accessibilityLabel="Add product to shopping trip"
+          >
+            <Text style={styles.primaryButtonText}>
+              🛒 Add to Shopping Trip
+            </Text>
+          </Pressable>
+        )}
+
+        {/* ========================= */}
+        {/* ADDED TO TRIP */}
+        {/* ========================= */}
+
+        {addedToTrip && (
+          <View style={styles.addedSection}>
+            <View style={styles.addedBanner}>
+              <Text style={styles.addedBannerText}>
+                ✓ Product Added to Shopping Trip
+              </Text>
+            </View>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.primaryButton,
+                pressed && styles.buttonPressed,
+              ]}
+              onPress={viewShoppingTrip}
+              accessibilityRole="button"
+              accessibilityLabel="View shopping trip"
+            >
+              <Text style={styles.primaryButtonText}>
+                🛒 View Shopping Trip
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* ========================= */}
+        {/* CONTINUE SHOPPING */}
+        {/* ========================= */}
+
+        {addedToTrip && (
+          <View style={styles.continueCard}>
+            <Text style={styles.continueEmoji}>
+              📷
+            </Text>
+
+            <Text style={styles.continueTitle}>
+              Continue Shopping
+            </Text>
+
+            <Text style={styles.continueDescription}>
+              Scan another product to continue your current
+              shopping trip.
+            </Text>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.secondaryButton,
+                pressed && styles.buttonPressed,
+              ]}
+              onPress={scanAnotherProduct}
+              accessibilityRole="button"
+              accessibilityLabel="Scan another product"
+            >
+              <Text style={styles.secondaryButtonText}>
+                📷 Scan Another Product
+              </Text>
+            </Pressable>
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
+/* ================================= */
+/* STYLES */
+/* ================================= */
+
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    backgroundColor: '#F7F8FA',
-  },
-
-  keyboardContainer: {
-    flex: 1,
-  },
-
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 30,
+    backgroundColor: '#f7f7f8',
   },
 
   header: {
+    height: 72,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e5e7',
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
-    marginBottom: 20,
+    paddingHorizontal: 20,
   },
 
   backButton: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E3E5E8',
-    justifyContent: 'center',
+    backgroundColor: '#f0f0f2',
     alignItems: 'center',
-    marginRight: 12,
+    justifyContent: 'center',
   },
 
-  backIcon: {
+  backText: {
     fontSize: 32,
     lineHeight: 34,
-    color: '#111318',
+    color: '#111217',
+    marginTop: -3,
   },
 
-  headerText: {
+  headerCenter: {
     flex: 1,
+    alignItems: 'center',
   },
 
-  label: {
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#111217',
+  },
+
+  headerSubtitle: {
+    marginTop: 3,
     fontSize: 11,
-    fontWeight: '700',
-    color: '#70757D',
-    letterSpacing: 1,
+    color: '#777982',
   },
 
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#111318',
-    marginTop: 2,
+  headerSpacer: {
+    width: 42,
   },
 
-  productCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    padding: 20,
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+
+  card: {
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#E3E5E8',
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
+    borderColor: '#e1e1e4',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
   },
 
-  productIconContainer: {
-    width: 76,
-    height: 76,
-    borderRadius: 20,
-    backgroundColor: '#F7F8FA',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-
-  productIcon: {
-    fontSize: 38,
-  },
-
-  productInfo: {
-    flex: 1,
-  },
-
-  productCategory: {
-    fontSize: 9,
+  sectionLabel: {
+    fontSize: 10,
     fontWeight: '800',
-    color: '#8A8F97',
+    color: '#85868d',
     letterSpacing: 1,
-    marginBottom: 5,
+    marginBottom: 8,
   },
 
   productName: {
     fontSize: 23,
     fontWeight: '800',
-    color: '#111318',
+    color: '#111217',
+    lineHeight: 29,
   },
 
   brand: {
+    marginTop: 5,
     fontSize: 14,
-    color: '#70757D',
-    marginTop: 3,
+    fontWeight: '600',
+    color: '#65666d',
   },
 
-  weightBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#F1F2F4',
+  infoRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+
+  infoBadge: {
+    backgroundColor: '#f0f0f2',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 8,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    marginTop: 9,
   },
 
-  weightText: {
+  infoBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#555A63',
-  },
-
-  infoCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 17,
-    borderWidth: 1,
-    borderColor: '#E3E5E8',
-    marginBottom: 14,
-  },
-
-  sectionLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#8A8F97',
-    letterSpacing: 1,
-    marginBottom: 6,
+    color: '#55565d',
   },
 
   barcode: {
     fontSize: 19,
     fontWeight: '800',
-    color: '#111318',
+    color: '#111217',
     letterSpacing: 1,
   },
 
   barcodeType: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#70757D',
-    marginTop: 5,
-  },
-
-  priceCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#E3E5E8',
-    marginBottom: 14,
-  },
-
-  priceHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#111318',
-  },
-
-  sectionSubtitle: {
-    fontSize: 12,
-    color: '#70757D',
     marginTop: 4,
-    maxWidth: 290,
-    lineHeight: 17,
+    fontSize: 10,
+    color: '#8a8b91',
+    fontWeight: '600',
   },
 
-  priceIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#111318',
-    color: '#FFFFFF',
-    fontSize: 22,
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+
+  cardTitle: {
+    fontSize: 16,
     fontWeight: '800',
-    textAlign: 'center',
-    lineHeight: 42,
+    color: '#111217',
+  },
+
+  cardDescription: {
+    marginTop: 4,
+    fontSize: 11,
+    color: '#777982',
+  },
+
+  rupeeCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#111217',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  rupeeText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '800',
   },
 
   priceInputContainer: {
-    height: 60,
-    borderRadius: 15,
-    backgroundColor: '#F7F8FA',
+    height: 54,
+    marginTop: 14,
     borderWidth: 1,
-    borderColor: '#DADDE1',
+    borderColor: '#d9dade',
+    borderRadius: 12,
+    backgroundColor: '#f8f8fa',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
   },
 
-  rupeeSymbol: {
-    fontSize: 22,
+  inputRupee: {
+    fontSize: 19,
     fontWeight: '800',
-    color: '#111318',
-    marginRight: 8,
+    color: '#111217',
   },
 
   priceInput: {
     flex: 1,
-    fontSize: 22,
+    height: 52,
+    marginLeft: 8,
+    fontSize: 18,
     fontWeight: '700',
-    color: '#111318',
-    height: '100%',
+    color: '#111217',
+    outlineStyle: 'none',
+  } as any,
+
+  exampleText: {
+    marginTop: 7,
+    fontSize: 10,
+    color: '#85868d',
   },
 
-  priceHint: {
-    fontSize: 11,
-    color: '#8A8F97',
-    lineHeight: 16,
-    marginTop: 9,
-  },
-
-  comparisonCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#E3E5E8',
-    marginBottom: 14,
-  },
-
-  comparisonHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-
-  comparisonTitleContainer: {
-    flex: 1,
-  },
-
-  comparisonIcon: {
-    fontSize: 27,
-    marginLeft: 10,
+  moneyEmoji: {
+    fontSize: 21,
   },
 
   retailerRow: {
-    paddingVertical: 13,
+    minHeight: 64,
     borderBottomWidth: 1,
-    borderBottomColor: '#ECEDEF',
+    borderBottomColor: '#ededee',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -578,91 +723,78 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
 
-  retailerInfo: {
+  retailerLeft: {
     flex: 1,
   },
 
   retailerNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
+    gap: 7,
   },
 
   retailerName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
-    color: '#111318',
-  },
-
-  deliveryTime: {
-    fontSize: 11,
-    color: '#8A8F97',
-    marginTop: 3,
+    color: '#111217',
   },
 
   cheapestBadge: {
-    backgroundColor: '#111318',
-    borderRadius: 6,
+    backgroundColor: '#111217',
     paddingHorizontal: 6,
     paddingVertical: 3,
-    marginLeft: 7,
+    borderRadius: 5,
   },
 
-  cheapestBadgeText: {
-    fontSize: 8,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
+  cheapestText: {
+    fontSize: 7,
+    fontWeight: '900',
+    color: '#ffffff',
+  },
+
+  deliveryTime: {
+    marginTop: 4,
+    fontSize: 10,
+    color: '#7e7f86',
   },
 
   retailerPrice: {
-    fontSize: 17,
+    fontSize: 14,
     fontWeight: '800',
-    color: '#111318',
-    marginLeft: 12,
+    color: '#111217',
   },
 
-  noPricesCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#E3E5E8',
+  noPrices: {
+    paddingVertical: 20,
     alignItems: 'center',
-    marginBottom: 14,
-  },
-
-  noPricesIcon: {
-    fontSize: 28,
-    marginBottom: 8,
   },
 
   noPricesTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
-    color: '#111318',
+    color: '#111217',
   },
 
   noPricesText: {
-    fontSize: 12,
-    color: '#70757D',
+    marginTop: 5,
+    fontSize: 11,
+    color: '#777982',
     textAlign: 'center',
-    marginTop: 4,
   },
 
   savingsCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 18,
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#E3E5E8',
+    borderColor: '#e1e1e4',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
   },
 
   savingsEmoji: {
-    fontSize: 34,
+    fontSize: 28,
     marginRight: 14,
   },
 
@@ -673,74 +805,103 @@ const styles = StyleSheet.create({
   savingsLabel: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#8A8F97',
+    color: '#85868d',
     letterSpacing: 1,
   },
 
   savingsAmount: {
-    fontSize: 28,
+    marginTop: 2,
+    fontSize: 22,
     fontWeight: '900',
-    color: '#111318',
+    color: '#111217',
+  },
+
+  savingsDescription: {
+    marginTop: 3,
+    fontSize: 10,
+    color: '#777982',
+  },
+
+  primaryButton: {
+    minHeight: 52,
+    borderRadius: 12,
+    backgroundColor: '#111217',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+
+  primaryButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  buttonPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.995 }],
+  },
+
+  addedSection: {
+    marginBottom: 4,
+  },
+
+  addedBanner: {
+    backgroundColor: '#e9f7ed',
+    borderWidth: 1,
+    borderColor: '#c9e9d1',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+
+  addedBannerText: {
+    color: '#20733a',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  continueCard: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e1e1e4',
+    borderRadius: 16,
+    padding: 16,
     marginTop: 2,
   },
 
-  savingsText: {
+  continueEmoji: {
+    fontSize: 25,
+    marginBottom: 8,
+  },
+
+  continueTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#111217',
+  },
+
+  continueDescription: {
+    marginTop: 5,
     fontSize: 11,
-    color: '#70757D',
-    lineHeight: 16,
-    marginTop: 3,
+    lineHeight: 17,
+    color: '#777982',
   },
 
-  continueButton: {
-    backgroundColor: '#111318',
-    borderRadius: 16,
-    paddingVertical: 16,
+  secondaryButton: {
+    minHeight: 48,
+    borderRadius: 11,
+    backgroundColor: '#111217',
     alignItems: 'center',
-    marginBottom: 14,
+    justifyContent: 'center',
+    marginTop: 14,
   },
 
-  continueButtonDisabled: {
-    opacity: 0.45,
-  },
-
-  continueButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
+  secondaryButtonText: {
+    color: '#ffffff',
+    fontSize: 13,
     fontWeight: '800',
-  },
-
-  nextCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 17,
-    padding: 15,
-    borderWidth: 1,
-    borderColor: '#E3E5E8',
-    flexDirection: 'row',
-  },
-
-  nextIcon: {
-    fontSize: 23,
-    marginRight: 12,
-  },
-
-  nextContent: {
-    flex: 1,
-  },
-
-  nextTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#111318',
-  },
-
-  nextText: {
-    fontSize: 12,
-    color: '#70757D',
-    lineHeight: 18,
-    marginTop: 4,
-  },
-
-  bottomSpace: {
-    height: 20,
   },
 });
