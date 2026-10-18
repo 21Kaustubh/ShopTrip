@@ -1,5 +1,14 @@
+export type RetailerName =
+  | 'Amazon'
+  | 'BigBasket'
+  | 'Blinkit'
+  | 'Flipkart'
+  | 'Flipkart Minutes'
+  | 'Instamart'
+  | 'Zepto';
+
 export type RetailerPrice = {
-  retailer: string;
+  retailer: RetailerName;
   price: number;
   deliveryTime: string;
 };

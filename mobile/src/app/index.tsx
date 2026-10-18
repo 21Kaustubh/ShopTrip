@@ -1,334 +1,153 @@
 import { router } from 'expo-router';
-import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useTrip } from '../context/TripContext';
+
 export default function HomeScreen() {
+  const { productCount, totalItems, totalSavings } = useTrip();
+  const hasTrip = productCount > 0;
+
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Welcome to</Text>
-            <Text style={styles.logo}>ShopTrip 🛒</Text>
+    <SafeAreaView style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.topbar}>
+          <View style={styles.wordmark}>
+            <View style={styles.mark}><View style={styles.markDot} /></View>
+            <Text style={styles.brand}>shoptrip</Text>
           </View>
-
-          <View style={styles.profileCircle}>
-            <Text style={styles.profileText}>K</Text>
-          </View>
+          <View style={styles.avatar}><Text style={styles.avatarText}>K</Text></View>
         </View>
 
-        {/* Savings Card */}
-        <View style={styles.savingsCard}>
-          <Text style={styles.cardLabel}>YOUR TOTAL SAVINGS</Text>
-          <Text style={styles.savingsAmount}>₹0</Text>
-          <Text style={styles.cardSubtext}>
-            Start shopping smarter and watch your savings grow.
+        <View style={styles.hero}>
+          <Text style={styles.eyebrow}>SMARTER SHOPPING, ONE TRIP AT A TIME</Text>
+          <Text style={styles.heroTitle}>Spend with{`\n`}clarity.</Text>
+          <Text style={styles.heroDescription}>
+            Scan, compare, and decide where every item belongs before you check out.
           </Text>
+          <Pressable style={styles.heroButton} onPress={() => router.push('/trip')}>
+            <Text style={styles.heroButtonText}>{hasTrip ? 'Continue my trip' : 'Start a shopping trip'}</Text>
+            <Text style={styles.heroButtonArrow}>→</Text>
+          </Pressable>
         </View>
 
-        {/* Start Trip */}
-        <TouchableOpacity
-          style={styles.startButton}
-          onPress={() => router.push('/trip')}
-        >
-          <Text style={styles.startIcon}>🛍️</Text>
-
-          <View style={styles.startContent}>
-            <Text style={styles.startTitle}>Start Shopping Trip</Text>
-            <Text style={styles.startSubtitle}>
-              Scan products & compare prices
+        <View style={styles.insightCard}>
+          <View>
+            <Text style={styles.insightLabel}>POTENTIAL SAVINGS</Text>
+            <Text style={styles.insightValue}>₹{totalSavings.toFixed(0)}</Text>
+            <Text style={styles.insightCaption}>
+              {hasTrip ? 'Across your active shopping trip' : 'Your trip starts here'}
             </Text>
           </View>
-
-          <Text style={styles.arrow}>›</Text>
-        </TouchableOpacity>
-
-        {/* Quick Actions */}
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-
-        <View style={styles.actionGrid}>
-          {/* Scan Product */}
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => router.push('/scan')}
-          >
-            <Text style={styles.actionIcon}>📷</Text>
-            <Text style={styles.actionTitle}>Scan Product</Text>
-            <Text style={styles.actionSubtitle}>Photo or barcode</Text>
-          </TouchableOpacity>
-
-          {/* My Savings */}
-          <TouchableOpacity style={styles.actionCard}>
-            <Text style={styles.actionIcon}>💰</Text>
-            <Text style={styles.actionTitle}>My Savings</Text>
-            <Text style={styles.actionSubtitle}>Track your savings</Text>
-          </TouchableOpacity>
-
-          {/* Trip History */}
-          <TouchableOpacity style={styles.actionCard}>
-            <Text style={styles.actionIcon}>🧳</Text>
-            <Text style={styles.actionTitle}>Trip History</Text>
-            <Text style={styles.actionSubtitle}>View past trips</Text>
-          </TouchableOpacity>
-
-          {/* Profile */}
-          <TouchableOpacity style={styles.actionCard}>
-            <Text style={styles.actionIcon}>👤</Text>
-            <Text style={styles.actionTitle}>Profile</Text>
-            <Text style={styles.actionSubtitle}>Account settings</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* How it works */}
-        <Text style={styles.sectionTitle}>How ShopTrip Works</Text>
-
-        <View style={styles.stepCard}>
-          <View style={styles.stepNumber}>
-            <Text style={styles.stepNumberText}>1</Text>
-          </View>
-
-          <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>Scan a product</Text>
-            <Text style={styles.stepDescription}>
-              Scan its barcode or take a photo while shopping.
-            </Text>
+          <View style={styles.insightBadge}>
+            <Text style={styles.insightBadgeValue}>{totalItems}</Text>
+            <Text style={styles.insightBadgeLabel}>ITEMS</Text>
           </View>
         </View>
 
-        <View style={styles.stepCard}>
-          <View style={styles.stepNumber}>
-            <Text style={styles.stepNumberText}>2</Text>
-          </View>
+        <View style={styles.sectionHeading}>
+          <Text style={styles.sectionTitle}>What do you want to do?</Text>
+          <Text style={styles.sectionHint}>CHOOSE A PATH</Text>
+        </View>
 
-          <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>Enter store price</Text>
-            <Text style={styles.stepDescription}>
-              Tell ShopTrip the price you see in the physical store.
-            </Text>
+        <View style={styles.actionStack}>
+          <Pressable style={styles.primaryAction} onPress={() => router.push('/scan')}>
+            <View style={[styles.actionIcon, styles.actionIconDark]}><Text style={styles.actionGlyph}>⌁</Text></View>
+            <View style={styles.actionCopy}>
+              <Text style={styles.primaryActionTitle}>Scan an item</Text>
+              <Text style={styles.primaryActionSubtitle}>Use a barcode for a quick match</Text>
+            </View>
+            <Text style={styles.actionArrow}>→</Text>
+          </Pressable>
+          <Pressable style={styles.secondaryAction} onPress={() => router.push('/search')}>
+            <View style={[styles.actionIcon, styles.actionIconSoft]}><Text style={styles.secondaryGlyph}>⌕</Text></View>
+            <View style={styles.actionCopy}>
+              <Text style={styles.secondaryActionTitle}>Search a product</Text>
+              <Text style={styles.secondaryActionSubtitle}>Find it by name, brand, or barcode</Text>
+            </View>
+            <Text style={styles.secondaryArrow}>→</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.howCard}>
+          <Text style={styles.howEyebrow}>HOW IT WORKS</Text>
+          <View style={styles.steps}>
+            <Step number="01" title="Find" body="Scan or search the product you are considering." />
+            <View style={styles.stepLine} />
+            <Step number="02" title="Compare" body="See the available retailer options in one view." />
+            <View style={styles.stepLine} />
+            <Step number="03" title="Decide" body="Build the trip that makes sense for you." />
           </View>
         </View>
 
-        <View style={styles.stepCard}>
-          <View style={styles.stepNumber}>
-            <Text style={styles.stepNumberText}>3</Text>
-          </View>
-
-          <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>Compare & save</Text>
-            <Text style={styles.stepDescription}>
-              Compare trusted retailers and discover potential savings.
-            </Text>
-          </View>
-        </View>
+        <Text style={styles.disclaimer}>Demo prices are illustrative until live retailer data is connected.</Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+function Step({ number, title, body }: { number: string; title: string; body: string }) {
+  return (
+    <View style={styles.step}>
+      <Text style={styles.stepNumber}>{number}</Text>
+      <View style={styles.stepCopy}>
+        <Text style={styles.stepTitle}>{title}</Text>
+        <Text style={styles.stepBody}>{body}</Text>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F7F8FA',
-  },
-
-  content: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-  },
-
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
-    marginBottom: 24,
-  },
-
-  greeting: {
-    fontSize: 15,
-    color: '#70757D',
-  },
-
-  logo: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#111318',
-    marginTop: 2,
-  },
-
-  profileCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: '#111318',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  profileText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-
-  savingsCard: {
-    backgroundColor: '#111318',
-    borderRadius: 22,
-    padding: 24,
-    marginBottom: 16,
-  },
-
-  cardLabel: {
-    color: '#AEB3BB',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-
-  savingsAmount: {
-    color: '#FFFFFF',
-    fontSize: 42,
-    fontWeight: '800',
-    marginTop: 6,
-  },
-
-  cardSubtext: {
-    color: '#C9CDD3',
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 6,
-  },
-
-  startButton: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 28,
-    borderWidth: 1,
-    borderColor: '#E3E5E8',
-  },
-
-  startIcon: {
-    fontSize: 30,
-    marginRight: 14,
-  },
-
-  startContent: {
-    flex: 1,
-  },
-
-  startTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#111318',
-  },
-
-  startSubtitle: {
-    fontSize: 13,
-    color: '#70757D',
-    marginTop: 3,
-  },
-
-  arrow: {
-    fontSize: 30,
-    color: '#111318',
-    marginLeft: 'auto',
-  },
-
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#111318',
-    marginBottom: 14,
-  },
-
-  actionGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 28,
-  },
-
-  actionCard: {
-    width: '48%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E8E9EC',
-  },
-
-  actionIcon: {
-    fontSize: 27,
-    marginBottom: 12,
-  },
-
-  actionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#111318',
-  },
-
-  actionSubtitle: {
-    fontSize: 12,
-    color: '#7A7F87',
-    marginTop: 4,
-  },
-
-  stepCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#E8E9EC',
-  },
-
-  stepNumber: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#111318',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
-  },
-
-  stepNumberText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 15,
-  },
-
-  stepContent: {
-    flex: 1,
-  },
-
-  stepTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#111318',
-  },
-
-  stepDescription: {
-    fontSize: 12,
-    color: '#7A7F87',
-    lineHeight: 18,
-    marginTop: 3,
-  },
+  screen: { flex: 1, backgroundColor: '#F6F7F3' },
+  content: { paddingHorizontal: 20, paddingBottom: 36 },
+  topbar: { paddingTop: 10, height: 76, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  wordmark: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  mark: { width: 24, height: 24, borderRadius: 8, backgroundColor: '#1D4438', justifyContent: 'center', alignItems: 'center' },
+  markDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#D8F28A' },
+  brand: { color: '#132820', fontSize: 21, fontWeight: '800', letterSpacing: -0.8 },
+  avatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#E4E9D6', borderWidth: 1, borderColor: '#D3DCC2', alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#244C3F', fontSize: 14, fontWeight: '800' },
+  hero: { backgroundColor: '#1D4438', borderRadius: 28, padding: 25, paddingTop: 28, overflow: 'hidden' },
+  eyebrow: { color: '#C8DE98', fontSize: 10, fontWeight: '800', letterSpacing: 1.05 },
+  heroTitle: { color: '#FFFFFF', fontSize: 42, lineHeight: 43, fontWeight: '800', letterSpacing: -1.8, marginTop: 14 },
+  heroDescription: { color: '#D7E5DC', fontSize: 14, lineHeight: 21, marginTop: 14, maxWidth: 270 },
+  heroButton: { minHeight: 52, backgroundColor: '#D8F28A', marginTop: 25, borderRadius: 14, paddingHorizontal: 17, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  heroButtonText: { color: '#18372D', fontSize: 14, fontWeight: '800' },
+  heroButtonArrow: { color: '#18372D', fontSize: 21, fontWeight: '700' },
+  insightCard: { backgroundColor: '#FFFFFF', marginTop: 14, padding: 20, borderRadius: 21, borderWidth: 1, borderColor: '#E4E6DE', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  insightLabel: { color: '#708078', fontSize: 10, fontWeight: '800', letterSpacing: 0.9 },
+  insightValue: { color: '#17382D', fontSize: 31, fontWeight: '800', letterSpacing: -1.1, marginTop: 3 },
+  insightCaption: { color: '#7B8580', fontSize: 11, marginTop: 2 },
+  insightBadge: { width: 62, height: 62, borderRadius: 18, backgroundColor: '#EDF4D8', alignItems: 'center', justifyContent: 'center' },
+  insightBadgeValue: { color: '#254A3D', fontWeight: '800', fontSize: 20 },
+  insightBadgeLabel: { color: '#6C7D58', fontSize: 8, letterSpacing: 0.8, fontWeight: '800', marginTop: 1 },
+  sectionHeading: { marginTop: 31, marginBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+  sectionTitle: { color: '#152B22', fontSize: 18, fontWeight: '800', letterSpacing: -0.4 },
+  sectionHint: { color: '#84908A', fontSize: 9, fontWeight: '800', letterSpacing: 0.85 },
+  actionStack: { gap: 10 },
+  primaryAction: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 15, minHeight: 82, borderWidth: 1, borderColor: '#DCE3D4', flexDirection: 'row', alignItems: 'center' },
+  secondaryAction: { backgroundColor: '#EEF0E9', borderRadius: 18, padding: 15, minHeight: 82, flexDirection: 'row', alignItems: 'center' },
+  actionIcon: { width: 48, height: 48, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  actionIconDark: { backgroundColor: '#1D4438' },
+  actionIconSoft: { backgroundColor: '#DDE7D3' },
+  actionGlyph: { color: '#D8F28A', fontSize: 27, fontWeight: '600', marginTop: -3 },
+  secondaryGlyph: { color: '#315745', fontSize: 29, fontWeight: '500', marginTop: -4 },
+  actionCopy: { flex: 1, marginLeft: 13 },
+  primaryActionTitle: { color: '#17382D', fontSize: 15, fontWeight: '800' },
+  primaryActionSubtitle: { color: '#738078', fontSize: 11, marginTop: 3 },
+  secondaryActionTitle: { color: '#264535', fontSize: 15, fontWeight: '800' },
+  secondaryActionSubtitle: { color: '#748078', fontSize: 11, marginTop: 3 },
+  actionArrow: { color: '#214C3B', fontSize: 20 },
+  secondaryArrow: { color: '#60766B', fontSize: 20 },
+  howCard: { backgroundColor: '#17382D', marginTop: 29, borderRadius: 23, padding: 21 },
+  howEyebrow: { color: '#C8DE98', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  steps: { marginTop: 19 },
+  step: { flexDirection: 'row' },
+  stepNumber: { width: 34, color: '#D8F28A', fontSize: 11, fontWeight: '800', letterSpacing: 0.6, paddingTop: 2 },
+  stepCopy: { flex: 1 },
+  stepTitle: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
+  stepBody: { color: '#BED0C4', fontSize: 11, lineHeight: 16, marginTop: 3, paddingRight: 8 },
+  stepLine: { width: 1, height: 20, backgroundColor: '#4F7163', marginLeft: 16, marginVertical: 5 },
+  disclaimer: { color: '#8B948F', fontSize: 10, lineHeight: 14, textAlign: 'center', marginTop: 18, paddingHorizontal: 20 },
 });
