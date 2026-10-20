@@ -1,8 +1,10 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-    createContext,
-    useContext,
-    useState,
-    type ReactNode,
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
 } from 'react';
 
 export type PurchaseStatus =
@@ -26,101 +28,83 @@ export type TripProduct = {
   unit: string;
 
   storePrice: number;
-  onlinePrice: number;
+  onlinePrice: number; // 0 if unavailable
   cheapestRetailer: string;
   savings: number;
 
   quantity: number;
 
-  /*
-   * RETAILER TRACKING
-   *
-   * This records what the user selected.
-   * It does NOT claim that the retailer cart
-   * has actually been updated.
-   */
   selectedRetailer: string | null;
-
-  /*
-   * Number of units the user says they purchased.
-   *
-   * 0 means ShopTrip does not yet know
-   * how many were actually purchased.
-   */
   purchasedQuantity: number;
-
-  /*
-   * Current known state of this product.
-   */
   purchaseStatus: PurchaseStatus;
-
-  /*
-   * Whether the user pressed the Buy button.
-   */
   retailerBuyClicked: boolean;
-
-  /*
-   * Timestamp of the first Buy click.
-   */
   retailerOpenedAt: string | null;
 };
 
 type TripContextType = {
   products: TripProduct[];
-
   addProduct: (product: TripProduct) => void;
   increaseQuantity: (barcode: string) => void;
   decreaseQuantity: (barcode: string) => void;
   removeProduct: (id: string) => void;
   clearTrip: () => void;
 
-  /*
-   * RETAILER TRACKING ACTIONS
-   */
-  markRetailerSelected: (
-    barcode: string,
-    retailer: string
-  ) => void;
-
-  markRetailerOpened: (
-    barcode: string
-  ) => void;
-
-  markPurchased: (
-    barcode: string,
-    purchasedQuantity: number
-  ) => void;
-
-  updatePurchaseStatus: (
-    barcode: string,
-    status: PurchaseStatus
-  ) => void;
+  markRetailerSelected: (barcode: string, retailer: string) => void;
+  markRetailerOpened: (barcode: string) => void;
+  markPurchased: (barcode: string, purchasedQuantity: number) => void;
+  updatePurchaseStatus: (barcode: string, status: PurchaseStatus) => void;
 
   totalSavings: number;
+  totalStorePrice: number;
+  totalOnlinePrice: number;
   productCount: number;
   totalItems: number;
 };
 
-const TripContext = createContext<
-  TripContextType | undefined
->(undefined);
+const GUEST_TRIP_KEY = '@shoptrip_guest_trip';
 
-export function TripProvider({
-  children,
-}: {
-  children: ReactNode;
-}) {
-  const [products, setProducts] = useState<TripProduct[]>(
-    []
-  );
+const TripContext = createContext<TripContextType | undefined>(undefined);
 
-  /*
-   * ADD PRODUCT
-   *
-   * If the same barcode already exists:
-   * increase quantity instead of creating
-   * another product card.
-   */
+export function TripProvider({ children }: { children: ReactNode }) {
+  const [products, setProducts] = useState<TripProduct[]>([]);
+  const [hasLoaded, setHasLoaded] = useState(false);
+
+  // Restore guest trip from local storage on mount
+  useEffect(() => {
+    async function loadStoredTrip() {
+      try {
+        const stored = await AsyncStorage.getItem(GUEST_TRIP_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            setProducts(parsed);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load stored shopping trip:', err);
+      } finally {
+        setHasLoaded(true);
+      }
+    }
+
+    loadStoredTrip();
+  }, []);
+
+  // Persist trip to local storage on change (after initial load)
+  useEffect(() => {
+    if (!hasLoaded) return;
+
+    async function saveTrip() {
+      try {
+        await AsyncStorage.setItem(GUEST_TRIP_KEY, JSON.stringify(products));
+      } catch (err) {
+        console.warn('Failed to persist shopping trip:', err);
+      }
+    }
+
+    saveTrip();
+  }, [products, hasLoaded]);
+
   const addProduct = (product: TripProduct) => {
     setProducts((currentProducts) => {
       const existingProduct = currentProducts.find(
@@ -142,34 +126,17 @@ export function TripProvider({
         ...currentProducts,
         {
           ...product,
-          quantity: 1,
-
-          /*
-           * New tracking defaults.
-           */
-          selectedRetailer:
-            product.selectedRetailer ?? null,
-
-          purchasedQuantity:
-            product.purchasedQuantity ?? 0,
-
-          purchaseStatus:
-            product.purchaseStatus ??
-            'PLANNED',
-
-          retailerBuyClicked:
-            product.retailerBuyClicked ?? false,
-
-          retailerOpenedAt:
-            product.retailerOpenedAt ?? null,
+          quantity: product.quantity || 1,
+          selectedRetailer: product.selectedRetailer ?? null,
+          purchasedQuantity: product.purchasedQuantity ?? 0,
+          purchaseStatus: product.purchaseStatus ?? 'PLANNED',
+          retailerBuyClicked: product.retailerBuyClicked ?? false,
+          retailerOpenedAt: product.retailerOpenedAt ?? null,
         },
       ];
     });
   };
 
-  /*
-   * INCREASE QUANTITY
-   */
   const increaseQuantity = (barcode: string) => {
     setProducts((currentProducts) =>
       currentProducts.map((product) =>
@@ -183,54 +150,30 @@ export function TripProvider({
     );
   };
 
-  /*
-   * DECREASE QUANTITY
-   *
-   * Minimum quantity is 1.
-   */
   const decreaseQuantity = (barcode: string) => {
     setProducts((currentProducts) =>
       currentProducts.map((product) =>
         product.barcode === barcode
           ? {
               ...product,
-              quantity: Math.max(
-                1,
-                (product.quantity ?? 1) - 1
-              ),
+              quantity: Math.max(1, (product.quantity ?? 1) - 1),
             }
           : product
       )
     );
   };
 
-  /*
-   * REMOVE ENTIRE PRODUCT
-   */
   const removeProduct = (id: string) => {
     setProducts((currentProducts) =>
-      currentProducts.filter(
-        (product) => product.id !== id
-      )
+      currentProducts.filter((product) => product.id !== id)
     );
   };
 
-  /*
-   * CLEAR CURRENT TRIP
-   */
   const clearTrip = () => {
     setProducts([]);
   };
 
-  /*
-   * MARK RETAILER SELECTED
-   *
-   * This records the user's retailer choice.
-   */
-  const markRetailerSelected = (
-    barcode: string,
-    retailer: string
-  ) => {
+  const markRetailerSelected = (barcode: string, retailer: string) => {
     setProducts((currentProducts) =>
       currentProducts.map((product) =>
         product.barcode === barcode
@@ -244,27 +187,14 @@ export function TripProvider({
     );
   };
 
-  /*
-   * MARK RETAILER OPENED
-   *
-   * This means the user pressed the Buy button
-   * and ShopTrip attempted to open the retailer.
-   *
-   * It does NOT mean the product was added
-   * to the retailer cart.
-   */
-  const markRetailerOpened = (
-    barcode: string
-  ) => {
+  const markRetailerOpened = (barcode: string) => {
     setProducts((currentProducts) =>
       currentProducts.map((product) =>
         product.barcode === barcode
           ? {
               ...product,
               retailerBuyClicked: true,
-              retailerOpenedAt:
-                product.retailerOpenedAt ??
-                new Date().toISOString(),
+              retailerOpenedAt: product.retailerOpenedAt ?? new Date().toISOString(),
               purchaseStatus: 'RETAILER_OPENED',
             }
           : product
@@ -272,43 +202,21 @@ export function TripProvider({
     );
   };
 
-  /*
-   * MARK PURCHASED
-   *
-   * This will later be used when we have an
-   * official retailer integration or when the
-   * user confirms the purchased quantity.
-   */
-  const markPurchased = (
-    barcode: string,
-    purchasedQuantity: number
-  ) => {
+  const markPurchased = (barcode: string, purchasedQuantity: number) => {
     setProducts((currentProducts) =>
       currentProducts.map((product) =>
         product.barcode === barcode
           ? {
               ...product,
-              purchasedQuantity: Math.max(
-                0,
-                purchasedQuantity
-              ),
-              purchaseStatus:
-                purchasedQuantity > 0
-                  ? 'ORDERED'
-                  : 'PLANNED',
+              purchasedQuantity: Math.max(0, purchasedQuantity),
+              purchaseStatus: purchasedQuantity > 0 ? 'ORDERED' : 'PLANNED',
             }
           : product
       )
     );
   };
 
-  /*
-   * UPDATE PURCHASE STATUS
-   */
-  const updatePurchaseStatus = (
-    barcode: string,
-    status: PurchaseStatus
-  ) => {
+  const updatePurchaseStatus = (barcode: string, status: PurchaseStatus) => {
     setProducts((currentProducts) =>
       currentProducts.map((product) =>
         product.barcode === barcode
@@ -321,29 +229,32 @@ export function TripProvider({
     );
   };
 
-  /*
-   * TOTAL SAVINGS
-   *
-   * Unit saving × quantity
-   */
-  const totalSavings = products.reduce(
-    (total, product) =>
-      total +
-      product.savings * (product.quantity ?? 1),
-    0
-  );
+  // Price Integrity Calculations
+  // Total Savings: only calculated when online price is valid (> 0) and savings > 0
+  const totalSavings = products.reduce((total, product) => {
+    const qty = product.quantity ?? 1;
+    const savingPerUnit = typeof product.savings === 'number' && product.savings > 0 ? product.savings : 0;
+    return total + savingPerUnit * qty;
+  }, 0);
 
-  /*
-   * NUMBER OF DIFFERENT PRODUCTS
-   */
+  // Total Store Price: sum of shelf price * quantity
+  const totalStorePrice = products.reduce((total, product) => {
+    const qty = product.quantity ?? 1;
+    const price = typeof product.storePrice === 'number' && product.storePrice > 0 ? product.storePrice : 0;
+    return total + price * qty;
+  }, 0);
+
+  // Total Online Price: only includes items where a valid online offer exists (> 0)
+  const totalOnlinePrice = products.reduce((total, product) => {
+    const qty = product.quantity ?? 1;
+    const price = typeof product.onlinePrice === 'number' && product.onlinePrice > 0 ? product.onlinePrice : 0;
+    return total + price * qty;
+  }, 0);
+
   const productCount = products.length;
 
-  /*
-   * TOTAL NUMBER OF ITEMS
-   */
   const totalItems = products.reduce(
-    (total, product) =>
-      total + (product.quantity ?? 1),
+    (total, product) => total + (product.quantity ?? 1),
     0
   );
 
@@ -351,19 +262,18 @@ export function TripProvider({
     <TripContext.Provider
       value={{
         products,
-
         addProduct,
         increaseQuantity,
         decreaseQuantity,
         removeProduct,
         clearTrip,
-
         markRetailerSelected,
         markRetailerOpened,
         markPurchased,
         updatePurchaseStatus,
-
         totalSavings,
+        totalStorePrice,
+        totalOnlinePrice,
         productCount,
         totalItems,
       }}
@@ -375,12 +285,8 @@ export function TripProvider({
 
 export function useTrip() {
   const context = useContext(TripContext);
-
   if (!context) {
-    throw new Error(
-      'useTrip must be used inside TripProvider'
-    );
+    throw new Error('useTrip must be used inside TripProvider');
   }
-
   return context;
 }

@@ -2,779 +2,454 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { getProductByBarcode } from '../services/productService';
+import { ThemeToggle, useAppTheme } from '../context/ThemeContext';
+import { getProductByBarcode, type Product } from '../services/productService';
 
 export default function ScanScreen() {
-  const [permission, requestPermission] =
-    useCameraPermissions();
+  const { colors, isDark } = useAppTheme();
+  const [permission, requestPermission] = useCameraPermissions();
 
   const [scanned, setScanned] = useState(false);
+  const [searching, setSearching] = useState(false);
   const [barcode, setBarcode] = useState<string | null>(null);
-  const [barcodeType, setBarcodeType] =
-    useState<string | null>(null);
-
+  const [barcodeType, setBarcodeType] = useState<string | null>(null);
   const [manualBarcode, setManualBarcode] = useState('');
+  const [product, setProduct] = useState<Product | null>(null);
 
-  const [product, setProduct] = useState<
-    ReturnType<typeof getProductByBarcode>
-  >(null);
+  const navigateToProduct = (foundProduct: Product, type: string) => {
+    router.push({
+      pathname: '/product',
+      params: {
+        barcode: foundProduct.barcode,
+        barcodeType: type,
+        productName: foundProduct.productName,
+        brand: foundProduct.brand,
+        category: foundProduct.category,
+        weight: foundProduct.weight || '',
+        unit: foundProduct.unit || '',
+      },
+    });
+  };
 
-  const handleBarcodeScanned = ({
+  const handleBarcodeScanned = async ({
     type,
     data,
   }: {
     type: string;
     data: string;
   }) => {
-    if (scanned) return;
+    if (scanned || searching) return;
 
     setScanned(true);
+    setSearching(true);
     setBarcode(data);
     setBarcodeType(type);
 
-    const foundProduct = getProductByBarcode(data);
+    try {
+      const foundProduct = await getProductByBarcode(data);
+      setProduct(foundProduct);
 
-    setProduct(foundProduct);
-
-    if (foundProduct) {
-      router.push({
-        pathname: '/product',
-        params: {
-          barcode: foundProduct.barcode,
-          barcodeType: type,
-          productName: foundProduct.productName,
-          brand: foundProduct.brand,
-          category: foundProduct.category,
-          weight: foundProduct.weight,
-          unit: foundProduct.unit,
-        },
-      });
+      if (foundProduct) {
+        navigateToProduct(foundProduct, type);
+      }
+    } finally {
+      setSearching(false);
     }
   };
 
-  const handleManualBarcode = () => {
+  const handleManualBarcode = async () => {
     const cleanBarcode = manualBarcode.trim();
+    if (!cleanBarcode || searching) return;
 
-    if (!cleanBarcode) return;
-
-    const foundProduct =
-      getProductByBarcode(cleanBarcode);
-
-    if (!foundProduct) {
-      setBarcode(cleanBarcode);
-      setBarcodeType('MANUAL');
-      setScanned(true);
-      setProduct(null);
-      return;
-    }
-
+    setSearching(true);
     setBarcode(cleanBarcode);
     setBarcodeType('MANUAL');
-    setProduct(foundProduct);
     setScanned(true);
 
-    router.push({
-      pathname: '/product',
-      params: {
-        barcode: foundProduct.barcode,
-        barcodeType: 'MANUAL',
-        productName: foundProduct.productName,
-        brand: foundProduct.brand,
-        category: foundProduct.category,
-        weight: foundProduct.weight,
-        unit: foundProduct.unit,
-      },
-    });
+    try {
+      const foundProduct = await getProductByBarcode(cleanBarcode);
+      setProduct(foundProduct);
+
+      if (foundProduct) {
+        navigateToProduct(foundProduct, 'MANUAL');
+      }
+    } finally {
+      setSearching(false);
+    }
   };
 
+  const resetScanner = () => {
+    setScanned(false);
+    setSearching(false);
+    setBarcode(null);
+    setBarcodeType(null);
+    setProduct(null);
+    setManualBarcode('');
+  };
+
+  // Permission Loading State
   if (!permission) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centerContent}>
-          <Text style={styles.loadingText}>
-            Checking camera permission...
-          </Text>
+      <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]}>
+        <View style={styles.centerBox}>
+          <View style={[styles.loadingMark, { backgroundColor: isDark ? colors.accent : colors.primaryDark }]}>
+            <Text style={[styles.loadingMarkGlyph, { color: isDark ? colors.primaryDark : colors.accent }]}>⌁</Text>
+          </View>
+          <Text style={[styles.loadingTitle, { color: colors.text }]}>Connecting Camera</Text>
+          <Text style={[styles.loadingSubtitle, { color: colors.textSecondary }]}>Checking camera permissions...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
+  // Permission Required State
   if (!permission.granted) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.permissionContainer}>
-          <Text style={styles.permissionIcon}>📷</Text>
-
-          <Text style={styles.permissionTitle}>
-            Camera Permission Required
-          </Text>
-
-          <Text style={styles.permissionText}>
-            ShopTrip needs camera access to scan product
-            barcodes.
-          </Text>
-
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={requestPermission}
-          >
-            <Text style={styles.primaryButtonText}>
-              Allow Camera Access
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.backButton}
+      <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]}>
+        <View style={[styles.topbar, { borderBottomColor: colors.border, backgroundColor: colors.topbarBg }]}>
+          <Pressable
+            accessibilityLabel="Back to trip"
+            style={[styles.backButton, { backgroundColor: colors.chipBg }]}
             onPress={() => router.replace('/trip')}
           >
-            <Text style={styles.backButtonText}>
-              Go Back
-            </Text>
-          </TouchableOpacity>
+            <Text style={[styles.backArrow, { color: colors.chipText }]}>←</Text>
+          </Pressable>
+          <View style={styles.navTitles}>
+            <Text style={[styles.navEyebrow, { color: colors.textMuted }]}>SHOPTRIP</Text>
+            <Text style={[styles.navTitle, { color: colors.text }]}>Barcode Scanner</Text>
+          </View>
+          <ThemeToggle />
         </View>
+
+        <ScrollView contentContainerStyle={styles.permissionContent}>
+          <View style={[styles.permissionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+            <View style={[styles.permissionBadge, { backgroundColor: colors.primaryDark }]}>
+              <Text style={[styles.permissionBadgeGlyph, { color: colors.accent }]}>⌁</Text>
+            </View>
+            <Text style={[styles.permissionTitle, { color: colors.text }]}>Camera Access Required</Text>
+            <Text style={[styles.permissionDesc, { color: colors.textSecondary }]}>
+              ShopTrip uses your device camera to read product barcodes on grocery shelves and packaging for instant price comparison.
+            </Text>
+
+            <Pressable
+              style={[styles.primaryActionButton, { backgroundColor: colors.accent }]}
+              onPress={requestPermission}
+            >
+              <Text style={[styles.primaryActionText, { color: colors.accentText }]}>Allow Camera Access</Text>
+              <Text style={[styles.primaryActionArrow, { color: colors.accentText }]}>→</Text>
+            </Pressable>
+          </View>
+
+          <View style={[styles.fallbackCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+            <Text style={[styles.fallbackTitle, { color: colors.text }]}>Or Enter Barcode Manually</Text>
+            <Text style={[styles.fallbackDesc, { color: colors.textSecondary }]}>
+              You can still compare items without camera access by entering digits manually.
+            </Text>
+            <View style={styles.manualInputRow}>
+              <TextInput
+                style={[
+                  styles.manualTextInput,
+                  {
+                    backgroundColor: colors.inputBg,
+                    borderColor: colors.inputBorder,
+                    color: colors.inputText,
+                  },
+                ]}
+                value={manualBarcode}
+                onChangeText={setManualBarcode}
+                placeholder="e.g. 8901030974625"
+                placeholderTextColor={colors.inputPlaceholder}
+                keyboardType="numeric"
+                returnKeyType="search"
+                onSubmitEditing={handleManualBarcode}
+              />
+              <Pressable
+                style={[styles.manualSearchButton, { backgroundColor: colors.primaryDark }, !manualBarcode.trim() && styles.disabledButton]}
+                onPress={handleManualBarcode}
+                disabled={!manualBarcode.trim()}
+              >
+                <Text style={styles.manualSearchButtonText}>Find</Text>
+              </Pressable>
+            </View>
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
 
+  // Active Scanner Screen
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]}>
       {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.headerBackButton}
+      <View style={[styles.topbar, { borderBottomColor: colors.border, backgroundColor: colors.topbarBg }]}>
+        <Pressable
+          accessibilityLabel="Back to trip"
+          style={[styles.backButton, { backgroundColor: colors.chipBg }]}
           onPress={() => router.replace('/trip')}
         >
-          <Text style={styles.headerBackText}>‹</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.headerTitle}>
-          Scan Product
-        </Text>
-
-        <View style={styles.headerSpacer} />
-      </View>
-
-      {/* CAMERA */}
-      <View style={styles.scannerContainer}>
-        <CameraView
-          style={styles.camera}
-          facing="back"
-          zoom={0.45}
-          barcodeScannerSettings={{
-            barcodeTypes: [
-              'ean13',
-              'ean8',
-              'upc_a',
-              'upc_e',
-              'code128',
-              'code39',
-              'code93',
-              'itf14',
-              'codabar',
-            ],
-          }}
-          onBarcodeScanned={
-            scanned ? undefined : handleBarcodeScanned
-          }
-        >
-          <View style={styles.overlay}>
-            <View style={styles.scanBox}>
-              <View
-                style={[
-                  styles.corner,
-                  styles.topLeft,
-                ]}
-              />
-
-              <View
-                style={[
-                  styles.corner,
-                  styles.topRight,
-                ]}
-              />
-
-              <View
-                style={[
-                  styles.corner,
-                  styles.bottomLeft,
-                ]}
-              />
-
-              <View
-                style={[
-                  styles.corner,
-                  styles.bottomRight,
-                ]}
-              />
-            </View>
-
-            <Text style={styles.scanInstruction}>
-              Move the barcode inside the box
-            </Text>
-
-            <Text style={styles.zoomHint}>
-              🔍 Zoom enabled for small barcodes
-            </Text>
-          </View>
-        </CameraView>
-      </View>
-
-      {/* MANUAL BARCODE */}
-      {!scanned && (
-        <View style={styles.manualContainer}>
-          <Text style={styles.manualTitle}>
-            Barcode not scanning?
-          </Text>
-
-          <Text style={styles.manualSubtitle}>
-            Enter the barcode number manually.
-          </Text>
-
-          <View style={styles.manualRow}>
-            <TextInput
-              style={styles.manualInput}
-              value={manualBarcode}
-              onChangeText={setManualBarcode}
-              placeholder="e.g. 8909106048553"
-              placeholderTextColor="#9CA3AF"
-              keyboardType="numeric"
-              maxLength={14}
-            />
-
-            <TouchableOpacity
-              style={[
-                styles.manualButton,
-                !manualBarcode.trim() &&
-                  styles.manualButtonDisabled,
-              ]}
-              onPress={handleManualBarcode}
-              disabled={!manualBarcode.trim()}
-            >
-              <Text style={styles.manualButtonText}>
-                Find
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={[styles.backArrow, { color: colors.chipText }]}>←</Text>
+        </Pressable>
+        <View style={styles.navTitles}>
+          <Text style={[styles.navEyebrow, { color: colors.textMuted }]}>SHOPTRIP</Text>
+          <Text style={[styles.navTitle, { color: colors.text }]}>Scan Barcode</Text>
         </View>
-      )}
+        <ThemeToggle />
+      </View>
 
-      {/* INFORMATION */}
-      {!scanned && (
-        <View style={styles.bottomInfo}>
-          <Text style={styles.bottomIcon}>🛒</Text>
-
-          <Text style={styles.bottomTitle}>
-            Scan any product barcode
-          </Text>
-
-          <Text style={styles.bottomText}>
-            ShopTrip will identify the product and compare
-            prices across online stores.
-          </Text>
-
-          <TouchableOpacity
-            style={styles.aiButton}
-            onPress={() => {
-              // AI photo scanning will be added later.
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* CAMERA VIEWPORT */}
+        <View style={styles.cameraViewport}>
+          <CameraView
+            style={styles.camera}
+            facing="back"
+            zoom={0.45}
+            barcodeScannerSettings={{
+              barcodeTypes: [
+                'ean13',
+                'ean8',
+                'upc_a',
+                'upc_e',
+                'code128',
+                'code39',
+                'code93',
+                'itf14',
+                'codabar',
+              ],
             }}
+            onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
           >
-            <Text style={styles.aiButtonText}>
-              ✨ Identify with AI Photo
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+            <View style={styles.cameraOverlay}>
+              <View style={styles.targetFrame}>
+                <View style={[styles.cornerBracket, styles.topLeftBracket]} />
+                <View style={[styles.cornerBracket, styles.topRightBracket]} />
+                <View style={[styles.cornerBracket, styles.bottomLeftBracket]} />
+                <View style={[styles.cornerBracket, styles.bottomRightBracket]} />
 
-      {/* RESULT */}
-      {scanned && (
-        <View style={styles.resultContainer}>
-          <Text style={styles.resultTitle}>
-            Barcode Detected
-          </Text>
+                <View style={styles.scanLaser} />
+              </View>
 
-          <View style={styles.barcodeInfo}>
-            <Text style={styles.infoLabel}>
-              Barcode Type
-            </Text>
-
-            <Text style={styles.infoValue}>
-              {barcodeType || 'Unknown'}
-            </Text>
-
-            <Text style={styles.infoLabel}>
-              Barcode Number
-            </Text>
-
-            <Text style={styles.infoValue}>
-              {barcode || 'Unknown'}
-            </Text>
-          </View>
-
-          {product ? (
-            <View style={styles.productFound}>
-              <Text style={styles.productFoundIcon}>
-                ✅
-              </Text>
-
-              <View style={styles.productFoundContent}>
-                <Text style={styles.productFoundTitle}>
-                  Product Found
-                </Text>
-
-                <Text style={styles.productName}>
-                  {product.productName}
-                </Text>
-
-                <Text style={styles.productDetails}>
-                  {product.brand} • {product.category}
-                </Text>
-
-                {product.weight && product.unit ? (
-                  <Text style={styles.productDetails}>
-                    {product.weight} {product.unit}
-                  </Text>
-                ) : null}
+              <View style={styles.cameraPill}>
+                <Text style={styles.cameraPillText}>ALIGN BARCODE WITHIN FRAME</Text>
               </View>
             </View>
-          ) : (
-            <View style={styles.productNotFound}>
-              <Text style={styles.notFoundIcon}>
-                ❌
-              </Text>
+          </CameraView>
+        </View>
 
-              <Text style={styles.notFoundTitle}>
-                Product Not Found
-              </Text>
+        {/* SCANNING INSTRUCTIONS CARD */}
+        <View style={[styles.instructionsCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+          <View style={styles.instructionsHeader}>
+            <View style={[styles.instructionsBadge, { backgroundColor: colors.badgeBg }]}>
+              <Text style={[styles.instructionsBadgeGlyph, { color: colors.badgeText }]}>ℹ</Text>
+            </View>
+            <Text style={[styles.instructionsTitle, { color: colors.text }]}>Scanning Guide & Best Results</Text>
+          </View>
+          <View style={styles.instructionList}>
+            <Text style={[styles.instructionItem, { color: colors.textSecondary }]}>
+              • Hold phone steady 15–20 cm away from packaging.
+            </Text>
+            <Text style={[styles.instructionItem, { color: colors.textSecondary }]}>
+              • For small barcodes, center digits inside the guide; 0.45× macro preset will lock focus.
+            </Text>
+            <Text style={[styles.instructionItem, { color: colors.textSecondary }]}>
+              • Ensure barcode is well-lit and avoid glossy glare.
+            </Text>
+          </View>
+        </View>
 
-              <Text style={styles.notFoundText}>
-                This barcode is not currently available in
-                the ShopTrip database.
+        {/* SEARCHING / RESULT CARD */}
+        {searching && (
+          <View style={[styles.resultCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <ActivityIndicator size="small" color={colors.accent} />
+            <Text style={[styles.searchingText, { color: colors.text }]}>
+              Querying database for barcode {barcode}...
+            </Text>
+          </View>
+        )}
+
+        {scanned && !searching && (
+          <View style={[styles.resultCard, { backgroundColor: colors.card, borderColor: product ? colors.primaryDark : colors.border }]}>
+            <View style={styles.resultHeader}>
+              <View style={[styles.dot, { backgroundColor: product ? colors.successDot : colors.warningDot }]} />
+              <Text style={[styles.resultStatusText, { color: colors.text }]}>
+                {product ? 'Product Identified' : 'Barcode Not Found in Database'}
+              </Text>
+              <Text style={[styles.resultBarcodeDigits, { color: colors.textMuted }]}>
+                {barcodeType}: {barcode}
               </Text>
             </View>
-          )}
 
-          <TouchableOpacity
-            style={styles.scanAgainButton}
-            onPress={() => {
-              setScanned(false);
-              setBarcode(null);
-              setBarcodeType(null);
-              setProduct(null);
-              setManualBarcode('');
-            }}
-          >
-            <Text style={styles.scanAgainText}>
-              📷 Scan Again
-            </Text>
-          </TouchableOpacity>
+            {product ? (
+              <View style={[styles.productMatchBox, { backgroundColor: colors.cardMuted }]}>
+                <Text style={[styles.matchedProductName, { color: colors.text }]}>{product.productName}</Text>
+                <Text style={[styles.matchedProductMeta, { color: colors.textSecondary }]}>
+                  {product.brand} · {product.category}
+                  {product.weight ? ` · ${product.weight} ${product.unit}` : ''}
+                </Text>
+
+                <Pressable
+                  style={[styles.matchedProceedButton, { backgroundColor: colors.primaryDark }]}
+                  onPress={() => navigateToProduct(product, barcodeType || 'CAMERA')}
+                >
+                  <Text style={[styles.matchedProceedText, { color: '#FFFFFF' }]}>Compare Prices</Text>
+                  <Text style={[styles.matchedProceedArrow, { color: colors.accent }]}>→</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={[styles.noMatchBox, { backgroundColor: isDark ? '#2D2012' : '#FBF7ED' }]}>
+                <Text style={[styles.noMatchTitle, { color: isDark ? '#FBBF24' : '#78350F' }]}>
+                  Item not in database
+                </Text>
+                <Text style={[styles.noMatchText, { color: isDark ? '#D97706' : '#92400E' }]}>
+                  Barcode {barcode} has not been registered in the ShopTrip database yet. An empty database is a normal state until products are seeded.
+                </Text>
+              </View>
+            )}
+
+            <Pressable style={styles.scanAgainButton} onPress={resetScanner}>
+              <Text style={[styles.scanAgainText, { color: colors.chipText }]}>Scan Another Item</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* MANUAL BARCODE ENTRY */}
+        <View style={[styles.manualEntryCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+          <Text style={[styles.kicker, { color: colors.textMuted }]}>MANUAL ENTRY</Text>
+          <Text style={[styles.manualSectionTitle, { color: colors.text }]}>Barcode not scanning?</Text>
+          <Text style={[styles.manualSectionSubtitle, { color: colors.textSecondary }]}>
+            Type the EAN or UPC digits printed under the barcode lines.
+          </Text>
+
+          <View style={styles.manualInputRow}>
+            <TextInput
+              style={[
+                styles.manualTextInput,
+                {
+                  backgroundColor: colors.inputBg,
+                  borderColor: colors.inputBorder,
+                  color: colors.inputText,
+                },
+              ]}
+              value={manualBarcode}
+              onChangeText={setManualBarcode}
+              placeholder="e.g. 8901030974625"
+              placeholderTextColor={colors.inputPlaceholder}
+              keyboardType="numeric"
+              returnKeyType="search"
+              onSubmitEditing={handleManualBarcode}
+            />
+            <Pressable
+              style={[
+                styles.manualSearchButton,
+                { backgroundColor: colors.primaryDark },
+                (!manualBarcode.trim() || searching) && styles.disabledButton,
+              ]}
+              onPress={handleManualBarcode}
+              disabled={!manualBarcode.trim() || searching}
+            >
+              <Text style={styles.manualSearchButtonText}>Look up</Text>
+            </Pressable>
+          </View>
         </View>
-      )}
+
+        <Text style={[styles.footerNote, { color: colors.textMuted }]}>
+          Barcode scanner uses device camera hardware · Connected to ShopTrip database API
+        </Text>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0B0F14',
-  },
-
-  centerContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  loadingText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-  },
-
-  permissionContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 30,
-  },
-
-  permissionIcon: {
-    fontSize: 64,
-    marginBottom: 20,
-  },
-
-  permissionTitle: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-
-  permissionText: {
-    color: '#9CA3AF',
-    fontSize: 15,
-    lineHeight: 22,
-    textAlign: 'center',
-    marginBottom: 30,
-  },
-
-  primaryButton: {
-    width: '100%',
-    backgroundColor: '#22C55E',
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-
-  backButton: {
-    marginTop: 16,
-    paddingVertical: 12,
-  },
-
-  backButtonText: {
-    color: '#9CA3AF',
-    fontSize: 15,
-  },
-
-  header: {
-    height: 64,
+  screen: { flex: 1 },
+  topbar: {
+    height: 72,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 18,
+    borderBottomWidth: 1,
   },
-
-  headerBackButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#151B23',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  headerBackText: {
-    color: '#FFFFFF',
-    fontSize: 32,
-    lineHeight: 34,
-  },
-
-  headerTitle: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '700',
-  },
-
-  headerSpacer: {
-    width: 42,
-  },
-
-  scannerContainer: {
-    marginHorizontal: 18,
-    height: 390,
-    borderRadius: 24,
-    overflow: 'hidden',
-    backgroundColor: '#151B23',
-  },
-
-  camera: {
-    flex: 1,
-  },
-
-  overlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.25)',
-  },
-
-  scanBox: {
-    width: '85%',
-    height: 190,
-    position: 'relative',
-  },
-
-  corner: {
-    position: 'absolute',
-    width: 36,
-    height: 36,
-    borderColor: '#22C55E',
-  },
-
-  topLeft: {
-    top: 0,
-    left: 0,
-    borderTopWidth: 4,
-    borderLeftWidth: 4,
-    borderTopLeftRadius: 8,
-  },
-
-  topRight: {
-    top: 0,
-    right: 0,
-    borderTopWidth: 4,
-    borderRightWidth: 4,
-    borderTopRightRadius: 8,
-  },
-
-  bottomLeft: {
-    bottom: 0,
-    left: 0,
-    borderBottomWidth: 4,
-    borderLeftWidth: 4,
-    borderBottomLeftRadius: 8,
-  },
-
-  bottomRight: {
-    bottom: 0,
-    right: 0,
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderBottomRightRadius: 8,
-  },
-
-  scanInstruction: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    marginTop: 24,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-
-  zoomHint: {
-    color: '#D1D5DB',
-    fontSize: 12,
-    marginTop: 8,
-  },
-
-  manualContainer: {
-    marginHorizontal: 18,
-    marginTop: 14,
-    padding: 16,
-    backgroundColor: '#151B23',
-    borderRadius: 18,
-  },
-
-  manualTitle: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-
-  manualSubtitle: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    marginBottom: 12,
-  },
-
-  manualRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-
-  manualInput: {
-    flex: 1,
-    height: 48,
-    backgroundColor: '#0B0F14',
-    borderWidth: 1,
-    borderColor: '#374151',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    color: '#FFFFFF',
-    fontSize: 14,
-  },
-
-  manualButton: {
-    backgroundColor: '#22C55E',
-    paddingHorizontal: 20,
-    height: 48,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  manualButtonDisabled: {
-    opacity: 0.4,
-  },
-
-  manualButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 14,
-  },
-
-  bottomInfo: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 30,
-  },
-
-  bottomIcon: {
-    fontSize: 38,
-    marginBottom: 10,
-  },
-
-  bottomTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-
-  bottomText: {
-    color: '#9CA3AF',
-    fontSize: 14,
-    lineHeight: 20,
-    textAlign: 'center',
-    maxWidth: 340,
-  },
-
-  aiButton: {
-    marginTop: 20,
-    borderWidth: 1,
-    borderColor: '#374151',
-    paddingHorizontal: 18,
-    paddingVertical: 11,
-    borderRadius: 12,
-  },
-
-  aiButtonText: {
-    color: '#D1D5DB',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-
-  resultContainer: {
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 20,
-  },
-
-  resultTitle: {
-    color: '#22C55E',
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 14,
-  },
-
-  barcodeInfo: {
-    backgroundColor: '#151B23',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
-  },
-
-  infoLabel: {
-    color: '#6B7280',
-    fontSize: 12,
-    marginBottom: 4,
-    marginTop: 4,
-  },
-
-  infoValue: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-
-  productFound: {
-    flexDirection: 'row',
-    backgroundColor: '#10251A',
-    borderWidth: 1,
-    borderColor: '#1F6B3A',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
-  },
-
-  productFoundIcon: {
-    fontSize: 28,
-    marginRight: 12,
-  },
-
-  productFoundContent: {
-    flex: 1,
-  },
-
-  productFoundTitle: {
-    color: '#22C55E',
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 5,
-  },
-
-  productName: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-
-  productDetails: {
-    color: '#9CA3AF',
-    fontSize: 13,
-    marginTop: 2,
-  },
-
-  productNotFound: {
-    backgroundColor: '#241414',
-    borderWidth: 1,
-    borderColor: '#713535',
-    borderRadius: 16,
-    padding: 18,
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-
-  notFoundIcon: {
-    fontSize: 28,
-    marginBottom: 8,
-  },
-
-  notFoundTitle: {
-    color: '#F87171',
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-
-  notFoundText: {
-    color: '#9CA3AF',
-    fontSize: 13,
-    textAlign: 'center',
-    lineHeight: 19,
-  },
-
-  scanAgainButton: {
-    backgroundColor: '#22C55E',
-    paddingVertical: 15,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-
-  scanAgainText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  backButton: { width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  backArrow: { fontSize: 19, fontWeight: '700' },
+  navTitles: { flex: 1, marginLeft: 14 },
+  navEyebrow: { fontSize: 9, fontWeight: '800', letterSpacing: 1 },
+  navTitle: { fontSize: 19, fontWeight: '800', letterSpacing: -0.4, marginTop: 2 },
+  content: { padding: 20, paddingBottom: 48 },
+  centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30 },
+  loadingMark: { width: 60, height: 60, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  loadingMarkGlyph: { fontSize: 32, fontWeight: '700', marginTop: -3 },
+  loadingTitle: { fontSize: 18, fontWeight: '800' },
+  loadingSubtitle: { fontSize: 12, marginTop: 4 },
+  permissionContent: { padding: 20, gap: 16 },
+  permissionCard: { borderRadius: 22, borderWidth: 1, padding: 24, alignItems: 'center' },
+  permissionBadge: { width: 54, height: 54, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  permissionBadgeGlyph: { fontSize: 30, fontWeight: '700', marginTop: -2 },
+  permissionTitle: { fontSize: 19, fontWeight: '800', letterSpacing: -0.4, textAlign: 'center' },
+  permissionDesc: { fontSize: 13, lineHeight: 19, textAlign: 'center', marginTop: 8, marginBottom: 20, maxWidth: 290 },
+  primaryActionButton: { width: '100%', height: 50, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18 },
+  primaryActionText: { fontSize: 14, fontWeight: '800' },
+  primaryActionArrow: { fontSize: 18, fontWeight: '700' },
+  fallbackCard: { borderRadius: 20, borderWidth: 1, padding: 20 },
+  fallbackTitle: { fontSize: 15, fontWeight: '800' },
+  fallbackDesc: { fontSize: 12, lineHeight: 17, marginTop: 4, marginBottom: 14 },
+  cameraViewport: { height: 320, borderRadius: 22, overflow: 'hidden', backgroundColor: '#142720', borderWidth: 1.5, borderColor: '#1D4438' },
+  camera: { flex: 1 },
+  cameraOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(12, 28, 22, 0.45)' },
+  targetFrame: { width: 250, height: 160, position: 'relative', alignItems: 'center', justifyContent: 'center' },
+  cornerBracket: { position: 'absolute', width: 26, height: 26, borderColor: '#D8F28A' },
+  topLeftBracket: { top: 0, left: 0, borderTopWidth: 3.5, borderLeftWidth: 3.5, borderTopLeftRadius: 6 },
+  topRightBracket: { top: 0, right: 0, borderTopWidth: 3.5, borderRightWidth: 3.5, borderTopRightRadius: 6 },
+  bottomLeftBracket: { bottom: 0, left: 0, borderBottomWidth: 3.5, borderLeftWidth: 3.5, borderBottomLeftRadius: 6 },
+  bottomRightBracket: { bottom: 0, right: 0, borderBottomWidth: 3.5, borderRightWidth: 3.5, borderBottomRightRadius: 6 },
+  scanLaser: { width: '90%', height: 1.5, backgroundColor: '#D8F28A', opacity: 0.8 },
+  cameraPill: { marginTop: 18, backgroundColor: 'rgba(23, 56, 45, 0.85)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8 },
+  cameraPillText: { color: '#D8F28A', fontSize: 9, fontWeight: '900', letterSpacing: 0.8 },
+  instructionsCard: { borderRadius: 18, borderWidth: 1, padding: 16, marginTop: 14 },
+  instructionsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  instructionsBadge: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  instructionsBadgeGlyph: { fontSize: 12, fontWeight: '900' },
+  instructionsTitle: { fontSize: 13, fontWeight: '800' },
+  instructionList: { gap: 4 },
+  instructionItem: { fontSize: 11, lineHeight: 16 },
+  resultCard: { borderRadius: 18, borderWidth: 1.5, padding: 16, marginTop: 14, gap: 10 },
+  searchingText: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
+  resultHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  resultStatusText: { fontSize: 13, fontWeight: '800' },
+  resultBarcodeDigits: { fontSize: 11, marginLeft: 'auto' },
+  productMatchBox: { borderRadius: 12, padding: 12 },
+  matchedProductName: { fontSize: 15, fontWeight: '800' },
+  matchedProductMeta: { fontSize: 11, marginTop: 2, marginBottom: 12 },
+  matchedProceedButton: { height: 44, borderRadius: 10, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  matchedProceedText: { fontSize: 12, fontWeight: '800' },
+  matchedProceedArrow: { fontSize: 16, fontWeight: '700' },
+  noMatchBox: { borderRadius: 12, padding: 12 },
+  noMatchTitle: { fontSize: 13, fontWeight: '800' },
+  noMatchText: { fontSize: 11, lineHeight: 16, marginTop: 2 },
+  scanAgainButton: { marginTop: 4, alignItems: 'center', paddingVertical: 8 },
+  scanAgainText: { fontSize: 12, fontWeight: '800' },
+  manualEntryCard: { borderRadius: 20, borderWidth: 1, padding: 18, marginTop: 14 },
+  kicker: { fontSize: 9, fontWeight: '800', letterSpacing: 1, marginBottom: 4 },
+  manualSectionTitle: { fontSize: 16, fontWeight: '800' },
+  manualSectionSubtitle: { fontSize: 11, lineHeight: 16, marginTop: 3, marginBottom: 14 },
+  manualInputRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  manualTextInput: { flex: 1, height: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, fontSize: 14, fontWeight: '600', outlineStyle: 'none' } as any,
+  manualSearchButton: { height: 48, paddingHorizontal: 18, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  disabledButton: { opacity: 0.6 },
+  manualSearchButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
+  footerNote: { fontSize: 10, textAlign: 'center', lineHeight: 14, marginTop: 22, paddingHorizontal: 20 },
 });

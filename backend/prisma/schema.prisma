@@ -1,0 +1,113 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String         @id @default(uuid())
+  email        String         @unique
+  passwordHash String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  trips        ShoppingTrip[]
+
+  @@map("users")
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  products    Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id                 String          @id @default(uuid())
+  barcode            String          @unique
+  productName        String
+  brand              String
+  sizeInfo           String?
+  categoryId         String?
+  category           Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  imageUrl           String?
+  verificationStatus String          @default("VERIFIED")
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  offers             RetailerOffer[]
+  tripItems          TripItem[]
+
+  @@index([barcode])
+  @@index([productName])
+  @@index([brand])
+  @@map("products")
+}
+
+model Retailer {
+  id         String          @id @default(uuid())
+  name       String          @unique
+  websiteUrl String?
+  searchUrl  String?
+  isActive   Boolean         @default(true)
+  offers     RetailerOffer[]
+
+  @@map("retailers")
+}
+
+model RetailerOffer {
+  id           String     @id @default(uuid())
+  productId    String
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  retailerId   String
+  retailer     Retailer   @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+  price        Float
+  currency     String     @default("INR")
+  deliveryTime String?
+  availability String     @default("IN_STOCK")
+  source       String     @default("DIRECT")
+  lastChecked  DateTime   @default(now())
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  tripItems    TripItem[]
+
+  @@index([productId])
+  @@index([retailerId])
+  @@map("retailer_offers")
+}
+
+model ShoppingTrip {
+  id        String     @id @default(uuid())
+  userId    String?
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String     @default("Shopping Trip")
+  status    String     @default("ACTIVE")
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  items     TripItem[]
+
+  @@index([userId])
+  @@map("shopping_trips")
+}
+
+model TripItem {
+  id              String         @id @default(uuid())
+  tripId          String
+  trip            ShoppingTrip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity        Int            @default(1)
+  shelfPrice      Float?
+  selectedOfferId String?
+  selectedOffer   RetailerOffer? @relation(fields: [selectedOfferId], references: [id], onDelete: SetNull)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([tripId])
+  @@index([productId])
+  @@map("trip_items")
+}

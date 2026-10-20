@@ -1,0 +1,22 @@
+# backend/.gitignore — belt-and-suspenders for the Express/Prisma backend
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Prisma generated client (rebuilt via prisma generate)
+# node_modules is already covered above
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,1031 +1,498 @@
 import { router } from 'expo-router';
 import {
+  Alert,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useTrip } from '../context/TripContext';
+import { useAuth } from '../context/AuthContext';
+import { ThemeToggle, useAppTheme } from '../context/ThemeContext';
+import { useTrip, type TripProduct } from '../context/TripContext';
 
 export default function TripScreen() {
+  const { colors, isDark } = useAppTheme();
+  const { isGuest } = useAuth();
   const {
     products,
     productCount,
     totalItems,
     totalSavings,
+    totalStorePrice,
+    totalOnlinePrice,
     increaseQuantity,
     decreaseQuantity,
     removeProduct,
     clearTrip,
+    markRetailerOpened,
   } = useTrip();
 
-  // TOTAL STORE PRICE
-  const totalStorePrice = products.reduce(
-    (total, product) =>
-      total +
-      product.storePrice * (product.quantity ?? 1),
-    0
-  );
-
-  // TOTAL ONLINE PRICE
-  const totalOnlinePrice = products.reduce(
-    (total, product) =>
-      total +
-      product.onlinePrice * (product.quantity ?? 1),
-    0
-  );
-
-  // SCAN PRODUCT
   const scanAnotherProduct = () => {
     router.push('/scan');
   };
 
-  // SEARCH PRODUCT
   const searchProduct = () => {
     router.push('/search');
   };
 
-  // FINISH TRIP
   const finishShoppingTrip = () => {
-    clearTrip();
-    router.replace('/');
+    Alert.alert(
+      'Finish Shopping Trip',
+      'Are you sure you want to complete this trip? This will record your trip and reset the active list.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Finish Trip',
+          style: 'destructive',
+          onPress: () => {
+            clearTrip();
+            router.replace('/');
+          },
+        },
+      ]
+    );
+  };
+
+  const openRetailerLink = async (product: TripProduct) => {
+    const retailer = product.selectedRetailer || product.cheapestRetailer;
+    const query = encodeURIComponent(product.productName.trim());
+    const retailerUrls: Record<string, string> = {
+      Blinkit: `https://blinkit.com/s/?q=${query}`,
+      Zepto: `https://www.zeptonow.com/search?query=${query}`,
+      Amazon: `https://www.amazon.in/s?k=${query}`,
+      BigBasket: `https://www.bigbasket.com/ps/?q=${query}`,
+      Flipkart: `https://www.flipkart.com/search?q=${query}`,
+      'Flipkart Minutes': `https://www.flipkart.com/search?q=${query}`,
+      Instamart: `https://www.swiggy.com/instamart/search?query=${query}`,
+    };
+
+    const targetUrl =
+      retailerUrls[retailer] ??
+      `https://www.google.com/search?q=${encodeURIComponent(`${product.productName} ${retailer}`)}`;
+
+    try {
+      const supported = await Linking.canOpenURL(targetUrl);
+      if (supported) {
+        await Linking.openURL(targetUrl);
+        markRetailerOpened(product.barcode);
+      } else {
+        Alert.alert('Unable to Open Link', `Could not open ${retailer}.`);
+      }
+    } catch {
+      Alert.alert('Unable to Open Link', `Could not open ${retailer}.`);
+    }
+  };
+
+  const viewProductDetails = (product: TripProduct) => {
+    router.push({
+      pathname: '/product',
+      params: {
+        barcode: product.barcode,
+        productName: product.productName,
+        brand: product.brand,
+        category: product.category,
+        weight: product.weight,
+        unit: product.unit,
+      },
+    });
   };
 
   return (
-    <View style={styles.screen}>
-      {/* ========================= */}
-      {/* HEADER */}
-      {/* ========================= */}
-
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]}>
+      {/* TOP NAVIGATION */}
+      <View style={[styles.topbar, { borderBottomColor: colors.border, backgroundColor: colors.topbarBg }]}>
         <Pressable
-          style={styles.backButton}
+          accessibilityLabel="Back to home"
+          style={[styles.backButton, { backgroundColor: colors.chipBg }]}
           onPress={() => router.replace('/')}
         >
-          <Text style={styles.backText}>‹</Text>
+          <Text style={[styles.backArrow, { color: colors.chipText }]}>←</Text>
         </Pressable>
-
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerSmall}>
-            SHOPTRIP
+        <View style={styles.navTitles}>
+          <Text style={[styles.navEyebrow, { color: colors.textMuted }]}>
+            {isGuest ? 'GUEST SHOPPING TRIP' : 'ACCOUNT TRIP'}
           </Text>
-
-          <Text style={styles.headerTitle}>
-            Shopping Trip
-          </Text>
+          <Text style={[styles.navTitle, { color: colors.text }]}>Shopping Trip</Text>
         </View>
 
-        <View style={styles.headerSpacer} />
+        <ThemeToggle />
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* ========================= */}
-        {/* TRIP SUMMARY */}
-        {/* ========================= */}
-
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryHeader}>
+        {/* TRIP SUMMARY HERO CARD */}
+        <View style={[styles.heroSummaryCard, { backgroundColor: colors.heroBg }]}>
+          <View style={styles.heroHeader}>
             <View>
-              <Text style={styles.sectionLabel}>
-                CURRENT TRIP
-              </Text>
-
-              <Text style={styles.tripTitle}>
-                Shopping Trip #001 🛍️
-              </Text>
-            </View>
-
-            <View style={styles.activeBadge}>
-              <Text style={styles.activeBadgeText}>
-                ACTIVE
-              </Text>
-            </View>
-          </View>
-
-          {/* MAIN STATS */}
-
-          <View style={styles.statsRow}>
-            <View style={styles.stat}>
-              <Text style={styles.statNumber}>
-                {totalItems}
-              </Text>
-
-              <Text style={styles.statLabel}>
-                Total Items
-              </Text>
-            </View>
-
-            <View style={styles.statDivider} />
-
-            <View style={styles.stat}>
-              <Text style={styles.statNumber}>
+              <Text style={[styles.heroKicker, { color: colors.heroKicker }]}>PROJECTED TRIP SAVINGS</Text>
+              <Text style={styles.heroSavingsValue}>
                 ₹{totalSavings.toFixed(0)}
               </Text>
-
-              <Text style={styles.statLabel}>
-                Potential Savings
-              </Text>
+            </View>
+            <View style={[styles.itemCountBadge, { backgroundColor: isDark ? '#22352B' : '#2A5A4A' }]}>
+              <Text style={[styles.itemCountNumber, { color: colors.accent }]}>{totalItems}</Text>
+              <Text style={styles.itemCountLabel}>{totalItems === 1 ? 'ITEM' : 'ITEMS'}</Text>
             </View>
           </View>
 
-          {/* PRICE SUMMARY */}
+          <View style={[styles.heroDivider, { backgroundColor: isDark ? '#243A2F' : '#2F6150' }]} />
 
-          {productCount > 0 && (
-            <View style={styles.priceSummary}>
-              <View style={styles.priceSummaryRow}>
-                <Text style={styles.priceSummaryLabel}>
-                  Different Products
-                </Text>
-
-                <Text style={styles.priceSummaryValue}>
-                  {productCount}
-                </Text>
-              </View>
-
-              <View style={styles.priceSummaryRow}>
-                <Text style={styles.priceSummaryLabel}>
-                  Store Total
-                </Text>
-
-                <Text style={styles.priceSummaryValue}>
-                  ₹{totalStorePrice.toFixed(2)}
-                </Text>
-              </View>
-
-              <View style={styles.priceSummaryRow}>
-                <Text style={styles.priceSummaryLabel}>
-                  Cheapest Online Total
-                </Text>
-
-                <Text style={styles.priceSummaryValue}>
-                  ₹{totalOnlinePrice.toFixed(2)}
-                </Text>
-              </View>
-
-              <View style={styles.priceSummaryRow}>
-                <Text style={styles.savingsTotalLabel}>
-                  Total Potential Savings
-                </Text>
-
-                <Text style={styles.savingsTotalValue}>
-                  ₹{totalSavings.toFixed(2)}
-                </Text>
-              </View>
+          {/* FINANCIAL BREAKDOWN */}
+          <View style={styles.breakdownGrid}>
+            <View style={styles.breakdownCell}>
+              <Text style={styles.breakdownLabel}>Shelf Store Total</Text>
+              <Text style={styles.breakdownValue}>₹{totalStorePrice.toFixed(0)}</Text>
             </View>
-          )}
+            <View style={[styles.breakdownSeparator, { backgroundColor: isDark ? '#243A2F' : '#2F6150' }]} />
+            <View style={styles.breakdownCell}>
+              <Text style={styles.breakdownLabel}>Online Optimized</Text>
+              <Text style={[styles.breakdownValue, { color: colors.accent }]}>
+                {totalOnlinePrice > 0 ? `₹${totalOnlinePrice.toFixed(0)}` : 'None'}
+              </Text>
+            </View>
+            <View style={[styles.breakdownSeparator, { backgroundColor: isDark ? '#243A2F' : '#2F6150' }]} />
+            <View style={styles.breakdownCell}>
+              <Text style={styles.breakdownLabel}>Products</Text>
+              <Text style={styles.breakdownValue}>{productCount}</Text>
+            </View>
+          </View>
         </View>
 
-        {/* ========================= */}
-        {/* SCAN + SEARCH */}
-        {/* ========================= */}
-
+        {/* QUICK ACTION ROW */}
         <View style={styles.actionRow}>
-          {/* SCAN PRODUCT */}
-
           <Pressable
-            style={styles.actionButton}
+            style={[styles.actionButton, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
             onPress={scanAnotherProduct}
           >
-            <View style={styles.actionIconBox}>
-              <Text style={styles.actionIcon}>
-                📷
-              </Text>
+            <View style={[styles.actionIcon, { backgroundColor: isDark ? '#213329' : colors.primaryDark }]}>
+              <Text style={[styles.actionIconGlyph, { color: colors.accent }]}>⌁</Text>
             </View>
-
             <View style={styles.actionTextContainer}>
-              <Text style={styles.actionTitle}>
-                Scan Product
-              </Text>
-
-              <Text style={styles.actionSubtitle}>
-                Scan barcode
-              </Text>
+              <Text style={[styles.actionButtonTitle, { color: colors.text }]}>Scan Barcode</Text>
+              <Text style={[styles.actionButtonSubtitle, { color: colors.textSecondary }]}>Point at package</Text>
             </View>
+            <Text style={[styles.actionArrow, { color: colors.textSecondary }]}>→</Text>
           </Pressable>
 
-          {/* SEARCH PRODUCT */}
-
           <Pressable
-            style={styles.actionButton}
+            style={[styles.actionButton, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
             onPress={searchProduct}
           >
-            <View style={styles.actionIconBox}>
-              <Text style={styles.actionIcon}>
-                🔍
-              </Text>
+            <View style={[styles.actionIcon, { backgroundColor: colors.chipBg }]}>
+              <Text style={[styles.actionIconGlyphSoft, { color: colors.chipText }]}>⌕</Text>
             </View>
-
             <View style={styles.actionTextContainer}>
-              <Text style={styles.actionTitle}>
-                Search Product
-              </Text>
-
-              <Text style={styles.actionSubtitle}>
-                Find manually
-              </Text>
+              <Text style={[styles.actionButtonTitle, { color: colors.text }]}>Search Item</Text>
+              <Text style={[styles.actionButtonSubtitle, { color: colors.textSecondary }]}>Find in catalogue</Text>
             </View>
+            <Text style={[styles.actionArrow, { color: colors.textSecondary }]}>→</Text>
           </Pressable>
         </View>
 
-        {/* ========================= */}
-        {/* PRODUCTS TITLE */}
-        {/* ========================= */}
+        {/* SECTION HEADING */}
+        <View style={styles.sectionHeading}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Items on this trip</Text>
+          <Text style={[styles.sectionCount, { color: colors.textSecondary }]}>
+            {productCount} {productCount === 1 ? 'product' : 'products'}
+          </Text>
+        </View>
 
-        <Text style={styles.productsHeading}>
-          Trip Products
-        </Text>
-
-        {/* ========================= */}
         {/* EMPTY STATE */}
-        {/* ========================= */}
-
         {products.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyEmoji}>
-              🛒
+          <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+            <View style={[styles.emptyIconCircle, { backgroundColor: colors.badgeBg }]}>
+              <Text style={[styles.emptyIconGlyph, { color: colors.badgeText }]}>⌕</Text>
+            </View>
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>Your trip is waiting</Text>
+            <Text style={[styles.emptyDescription, { color: colors.textSecondary }]}>
+              Scan barcodes in the aisle or search the database to start tracking your purchases and savings.
             </Text>
-
-            <Text style={styles.emptyTitle}>
-              No products yet
-            </Text>
-
-            <Text style={styles.emptyDescription}>
-              Scan or search for a product to start
-              building your shopping trip.
-            </Text>
-
-            <View style={styles.emptyActions}>
+            <View style={styles.emptyButtonStack}>
               <Pressable
-                style={styles.emptyActionButton}
+                style={[styles.emptyPrimaryButton, { backgroundColor: isDark ? colors.accent : colors.primaryDark }]}
                 onPress={scanAnotherProduct}
               >
-                <Text style={styles.emptyActionText}>
-                  📷 Scan
+                <Text style={[styles.emptyPrimaryButtonText, { color: isDark ? colors.accentText : '#FFFFFF' }]}>
+                  Scan First Item
+                </Text>
+                <Text style={[styles.emptyPrimaryButtonArrow, { color: isDark ? colors.accentText : colors.accent }]}>
+                  →
                 </Text>
               </Pressable>
-
               <Pressable
-                style={styles.emptyActionButton}
+                style={[styles.emptySecondaryButton, { backgroundColor: colors.chipBg }]}
                 onPress={searchProduct}
               >
-                <Text style={styles.emptyActionText}>
-                  🔍 Search
+                <Text style={[styles.emptySecondaryButtonText, { color: colors.chipText }]}>
+                  Search Product Catalogue
                 </Text>
               </Pressable>
             </View>
           </View>
         ) : (
-          /* ========================= */
           /* PRODUCT LIST */
-          /* ========================= */
-
           <View style={styles.productList}>
             {products.map((product, index) => {
-              const quantity =
-                product.quantity ?? 1;
-
-              const productStoreTotal =
-                product.storePrice * quantity;
-
-              const productOnlineTotal =
-                product.onlinePrice * quantity;
-
-              const productSavingsTotal =
-                product.savings * quantity;
+              const quantity = product.quantity ?? 1;
+              const productStoreTotal = (product.storePrice || 0) * quantity;
+              const hasOnlineOffer = typeof product.onlinePrice === 'number' && product.onlinePrice > 0;
+              const productOnlineTotal = hasOnlineOffer ? product.onlinePrice * quantity : 0;
+              const productSavingsTotal = (product.savings || 0) * quantity;
+              const retailerToUse = product.selectedRetailer || product.cheapestRetailer;
 
               return (
                 <View
                   key={product.id}
-                  style={styles.productCard}
+                  style={[styles.productCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
                 >
-                  {/* PRODUCT HEADER */}
-
-                  <View style={styles.productTop}>
-                    <View style={styles.productIcon}>
-                      <Text style={styles.productIconText}>
-                        {product.category === 'Coffee'
-                          ? '☕'
-                          : product.category ===
-                            'Instant Soup'
-                          ? '🍅'
-                          : '🛒'}
+                  {/* CARD TOP INFO */}
+                  <View style={styles.cardTopRow}>
+                    <View style={[styles.productIndexBadge, { backgroundColor: colors.badgeBg }]}>
+                      <Text style={[styles.productIndexText, { color: colors.badgeText }]}>
+                        {index + 1 < 10 ? `0${index + 1}` : index + 1}
                       </Text>
                     </View>
-
-                    <View style={styles.productMain}>
-                      <Text style={styles.productName}>
-                        {product.productName}
-                      </Text>
-
-                      <Text style={styles.productBrand}>
-                        {product.brand}
-                        {product.weight
-                          ? ` • ${product.weight} ${product.unit}`
-                          : ''}
+                    <View style={styles.productNameBlock}>
+                      <Pressable onPress={() => viewProductDetails(product)}>
+                        <Text style={[styles.productNameText, { color: colors.text }]}>{product.productName}</Text>
+                      </Pressable>
+                      <Text style={[styles.productBrandText, { color: colors.textSecondary }]}>
+                        {product.brand} · {product.category}
+                        {product.weight ? ` · ${product.weight} ${product.unit}` : ''}
                       </Text>
                     </View>
-
-                    <Text style={styles.productNumber}>
-                      #{index + 1}
-                    </Text>
                   </View>
 
-                  {/* ========================= */}
-                  {/* QUANTITY */}
-                  {/* ========================= */}
-
-                  <View style={styles.quantitySection}>
-                    <Text style={styles.quantityLabel}>
-                      QUANTITY
-                    </Text>
-
-                    <View style={styles.quantityControl}>
-                      {/* MINUS */}
-
-                      <Pressable
-                        style={styles.quantityButton}
-                        onPress={() =>
-                          decreaseQuantity(
-                            product.barcode
-                          )
-                        }
-                      >
-                        <Text
-                          style={
-                            styles.quantityButtonText
-                          }
-                        >
-                          −
-                        </Text>
-                      </Pressable>
-
-                      {/* NUMBER */}
-
-                      <View
-                        style={styles.quantityNumberBox}
-                      >
-                        <Text
-                          style={styles.quantityNumber}
-                        >
-                          {quantity}
+                  {/* RETAILER ROUTING PILL */}
+                  {hasOnlineOffer && (
+                    <View style={[styles.retailerRouteRow, { backgroundColor: colors.cardMuted }]}>
+                      <View style={styles.retailerPill}>
+                        <Text style={[styles.retailerPillLabel, { color: colors.textMuted }]}>BUY FROM</Text>
+                        <Text style={[styles.retailerPillName, { color: colors.text }]}>{retailerToUse}</Text>
+                        <Text style={[styles.retailerPillPrice, { color: isDark ? colors.accent : colors.primaryDark }]}>
+                          ₹{product.onlinePrice.toFixed(0)}
                         </Text>
                       </View>
 
-                      {/* PLUS */}
-
                       <Pressable
-                        style={styles.quantityButton}
-                        onPress={() =>
-                          increaseQuantity(
-                            product.barcode
-                          )
-                        }
+                        style={[styles.openRetailerButton, { backgroundColor: colors.chipBg }]}
+                        onPress={() => openRetailerLink(product)}
                       >
-                        <Text
-                          style={
-                            styles.quantityButtonText
-                          }
-                        >
-                          +
-                        </Text>
+                        <Text style={[styles.openRetailerText, { color: colors.chipText }]}>External Store</Text>
+                        <Text style={[styles.openRetailerArrow, { color: colors.chipText }]}>↗</Text>
                       </Pressable>
                     </View>
+                  )}
+
+                  {/* PRICE COMPARISON SPLIT */}
+                  <View style={[styles.priceCompareGrid, { backgroundColor: colors.cardMuted, borderColor: colors.border }]}>
+                    <View style={styles.priceCell}>
+                      <Text style={[styles.priceCellLabel, { color: colors.textMuted }]}>IN-STORE SHELF</Text>
+                      <Text style={[styles.storePriceValue, { color: hasOnlineOffer ? colors.textSecondary : colors.text }]}>
+                        ₹{productStoreTotal.toFixed(0)}
+                      </Text>
+                      <Text style={[styles.unitPriceDetail, { color: colors.textMuted }]}>
+                        ₹{product.storePrice.toFixed(0)} × {quantity}
+                      </Text>
+                    </View>
+
+                    <View style={styles.compareArrowBox}>
+                      <Text style={[styles.compareArrow, { color: colors.textMuted }]}>→</Text>
+                    </View>
+
+                    <View style={styles.priceCell}>
+                      <Text style={[styles.priceCellLabel, { color: colors.textMuted }]}>BEST ONLINE</Text>
+                      <Text style={[styles.onlinePriceValue, { color: colors.text }]}>
+                        {hasOnlineOffer ? `₹${productOnlineTotal.toFixed(0)}` : 'Price unavailable'}
+                      </Text>
+                      <Text style={[styles.unitPriceDetail, { color: colors.textMuted }]}>
+                        {hasOnlineOffer ? `₹${product.onlinePrice.toFixed(0)} × ${quantity}` : 'No offers listed'}
+                      </Text>
+                    </View>
+
+                    {productSavingsTotal > 0 && (
+                      <View style={[styles.savingsCell, { backgroundColor: colors.badgeBg }]}>
+                        <Text style={[styles.savingsCellLabel, { color: colors.badgeText }]}>SAVINGS</Text>
+                        <Text style={[styles.savingsCellValue, { color: colors.badgeText }]}>
+                          ₹{productSavingsTotal.toFixed(0)}
+                        </Text>
+                      </View>
+                    )}
                   </View>
 
-                  {/* ========================= */}
-                  {/* PRICE DETAILS */}
-                  {/* ========================= */}
-
-                  <View style={styles.productPrices}>
-                    {/* STORE */}
-
-                    <View style={styles.priceColumn}>
-                      <Text style={styles.priceLabel}>
-                        YOUR STORE
-                      </Text>
-
-                      <Text style={styles.storePrice}>
-                        ₹{productStoreTotal.toFixed(2)}
-                      </Text>
-
-                      <Text style={styles.unitPrice}>
-                        ₹{product.storePrice.toFixed(2)} each
-                      </Text>
+                  {/* QUANTITY CONTROLS & REMOVE */}
+                  <View style={[styles.cardBottomRow, { borderTopColor: colors.border }]}>
+                    <View style={[styles.quantityStepper, { backgroundColor: colors.chipBg }]}>
+                      <Pressable
+                        style={[styles.stepperButton, { backgroundColor: colors.card, borderColor: colors.inputBorder }]}
+                        onPress={() => decreaseQuantity(product.barcode)}
+                      >
+                        <Text style={[styles.stepperButtonText, { color: colors.text }]}>−</Text>
+                      </Pressable>
+                      <View style={styles.stepperValueBox}>
+                        <Text style={[styles.stepperValueText, { color: colors.text }]}>{quantity}</Text>
+                      </View>
+                      <Pressable
+                        style={[styles.stepperButton, { backgroundColor: colors.card, borderColor: colors.inputBorder }]}
+                        onPress={() => increaseQuantity(product.barcode)}
+                      >
+                        <Text style={[styles.stepperButtonText, { color: colors.text }]}>+</Text>
+                      </Pressable>
                     </View>
 
-                    {/* ARROW */}
-
-                    <View style={styles.priceArrow}>
-                      <Text style={styles.priceArrowText}>
-                        →
-                      </Text>
-                    </View>
-
-                    {/* ONLINE */}
-
-                    <View style={styles.priceColumn}>
-                      <Text style={styles.priceLabel}>
-                        BEST ONLINE
-                      </Text>
-
-                      <Text style={styles.onlinePrice}>
-                        ₹{productOnlineTotal.toFixed(2)}
-                      </Text>
-
-                      <Text style={styles.retailerName}>
-                        {product.cheapestRetailer} • ₹
-                        {product.onlinePrice.toFixed(2)} each
-                      </Text>
-                    </View>
-
-                    {/* SAVINGS */}
-
-                    <View style={styles.savingBox}>
-                      <Text style={styles.savingBoxLabel}>
-                        SAVE
-                      </Text>
-
-                      <Text style={styles.savingBoxAmount}>
-                        ₹{productSavingsTotal.toFixed(2)}
-                      </Text>
-                    </View>
+                    <Pressable
+                      style={styles.removeLink}
+                      onPress={() => removeProduct(product.id)}
+                    >
+                      <Text style={[styles.removeLinkText, { color: colors.dangerText }]}>Remove</Text>
+                    </Pressable>
                   </View>
-
-                  {/* REMOVE */}
-
-                  <Pressable
-                    style={styles.removeButton}
-                    onPress={() =>
-                      removeProduct(product.id)
-                    }
-                  >
-                    <Text style={styles.removeButtonText}>
-                      Remove from Trip
-                    </Text>
-                  </Pressable>
                 </View>
               );
             })}
           </View>
         )}
 
-        {/* ========================= */}
-        {/* FINISH SHOPPING */}
-        {/* ========================= */}
-
+        {/* TRIP COMPLETION SECTION */}
         {productCount > 0 && (
-          <View style={styles.finishSection}>
-            <Text style={styles.finishTitle}>
-              Done Shopping?
-            </Text>
-
-            <Text style={styles.finishDescription}>
-              Finish this trip to save the final summary.
-            </Text>
-
+          <View style={[styles.completionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+            <View>
+              <Text style={[styles.completionTitle, { color: colors.text }]}>Finish this trip</Text>
+              <Text style={[styles.completionSubtitle, { color: colors.textSecondary }]}>
+                {isGuest
+                  ? 'Completes trip and clears current list. Create an account to sync trips across devices.'
+                  : 'Saves trip summary to your account and resets the active shopping list.'}
+              </Text>
+            </View>
             <Pressable
-              style={styles.finishButton}
+              style={[styles.finishTripButton, { backgroundColor: isDark ? colors.accent : colors.primaryDark }]}
               onPress={finishShoppingTrip}
             >
-              <Text style={styles.finishButtonText}>
-                🛑 Finish Shopping Trip
+              <Text style={[styles.finishTripButtonText, { color: isDark ? colors.accentText : '#FFFFFF' }]}>
+                Complete & Clear Trip
+              </Text>
+              <Text style={[styles.finishTripButtonArrow, { color: isDark ? colors.accentText : colors.accent }]}>
+                ✓
               </Text>
             </Pressable>
           </View>
         )}
+
+        <Text style={[styles.footerNote, { color: colors.textMuted }]}>
+          {isGuest
+            ? 'Guest mode · Shopping trip is stored locally on this device.'
+            : 'Authenticated mode · Trip synchronized with ShopTrip account.'}
+        </Text>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
-/* ================================= */
-/* STYLES */
-/* ================================= */
-
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: '#f7f7f8',
-  },
-
-  /* HEADER */
-
-  header: {
+  screen: { flex: 1 },
+  topbar: {
     height: 72,
-    backgroundColor: '#ffffff',
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e7',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
   },
-
-  backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#f0f0f2',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  backText: {
-    fontSize: 32,
-    lineHeight: 34,
-    color: '#111217',
-    marginTop: -3,
-  },
-
-  headerCenter: {
-    flex: 1,
-    marginLeft: 12,
-  },
-
-  headerSmall: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#777982',
-    letterSpacing: 1.4,
-  },
-
-  headerTitle: {
-    marginTop: 2,
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#111217',
-  },
-
-  headerSpacer: {
-    width: 42,
-  },
-
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 50,
-  },
-
-  /* SUMMARY */
-
-  summaryCard: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e1e1e4',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-  },
-
-  summaryHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-
-  sectionLabel: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#85868d',
-    letterSpacing: 1,
-    marginBottom: 7,
-  },
-
-  tripTitle: {
-    fontSize: 19,
-    fontWeight: '900',
-    color: '#111217',
-  },
-
-  activeBadge: {
-    backgroundColor: '#e5f7e9',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 7,
-  },
-
-  activeBadgeText: {
-    fontSize: 8,
-    fontWeight: '900',
-    color: '#28733d',
-  },
-
-  statsRow: {
-    marginTop: 22,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  stat: {
-    flex: 1,
-  },
-
-  statNumber: {
-    fontSize: 25,
-    fontWeight: '900',
-    color: '#111217',
-  },
-
-  statLabel: {
-    marginTop: 3,
-    fontSize: 10,
-    color: '#777982',
-  },
-
-  statDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: '#dedee1',
-    marginHorizontal: 20,
-  },
-
-  priceSummary: {
-    marginTop: 18,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: '#ededee',
-  },
-
-  priceSummaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 9,
-  },
-
-  priceSummaryLabel: {
-    fontSize: 11,
-    color: '#777982',
-  },
-
-  priceSummaryValue: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#111217',
-  },
-
-  savingsTotalLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#111217',
-  },
-
-  savingsTotalValue: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#111217',
-  },
-
-  /* SCAN + SEARCH */
-
-  actionRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
-  },
-
-  actionButton: {
-    flex: 1,
-    minHeight: 68,
-    backgroundColor: '#111217',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  actionIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: '#292a2f',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  actionIcon: {
-    fontSize: 20,
-  },
-
-  actionTextContainer: {
-    flex: 1,
-    marginLeft: 10,
-  },
-
-  actionTitle: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-
-  actionSubtitle: {
-    marginTop: 3,
-    color: '#aaaab0',
-    fontSize: 9,
-  },
-
-  /* PRODUCTS */
-
-  productsHeading: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: '#111217',
-    marginBottom: 10,
-  },
-
-  emptyCard: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e1e1e4',
-    borderRadius: 16,
-    minHeight: 190,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-
-  emptyEmoji: {
-    fontSize: 32,
-    marginBottom: 8,
-  },
-
-  emptyTitle: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#111217',
-  },
-
-  emptyDescription: {
-    marginTop: 5,
-    fontSize: 10,
-    color: '#777982',
-    textAlign: 'center',
-    lineHeight: 16,
-  },
-
-  emptyActions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 14,
-  },
-
-  emptyActionButton: {
-    backgroundColor: '#f0f0f2',
-    paddingHorizontal: 15,
-    paddingVertical: 9,
-    borderRadius: 9,
-  },
-
-  emptyActionText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#111217',
-  },
-
-  productList: {
-    gap: 12,
-  },
-
-  productCard: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e1e1e4',
-    borderRadius: 16,
-    padding: 15,
-  },
-
-  productTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  productIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#f0f0f2',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  productIconText: {
-    fontSize: 23,
-  },
-
-  productMain: {
-    flex: 1,
-    marginLeft: 11,
-  },
-
-  productName: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#111217',
-    lineHeight: 19,
-  },
-
-  productBrand: {
-    marginTop: 3,
-    fontSize: 10,
-    color: '#777982',
-  },
-
-  productNumber: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#999aa0',
-    marginLeft: 8,
-  },
-
-  /* QUANTITY */
-
-  quantitySection: {
-    marginTop: 15,
-    paddingTop: 13,
-    borderTopWidth: 1,
-    borderTopColor: '#ededee',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-
-  quantityLabel: {
-    fontSize: 8,
-    fontWeight: '900',
-    color: '#85868d',
-    letterSpacing: 0.8,
-  },
-
-  quantityControl: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#dcdde0',
-    borderRadius: 9,
-    overflow: 'hidden',
-    backgroundColor: '#f8f8fa',
-  },
-
-  quantityButton: {
-    width: 38,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#eeeeef',
-  },
-
-  quantityButtonText: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#111217',
-  },
-
-  quantityNumberBox: {
-    width: 44,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ffffff',
-  },
-
-  quantityNumber: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#111217',
-  },
-
-  /* PRICES */
-
-  productPrices: {
-    marginTop: 13,
-    paddingTop: 13,
-    borderTopWidth: 1,
-    borderTopColor: '#ededee',
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  priceColumn: {
-    flex: 1,
-  },
-
-  priceLabel: {
-    fontSize: 8,
-    fontWeight: '900',
-    color: '#85868d',
-    letterSpacing: 0.8,
-  },
-
-  storePrice: {
-    marginTop: 4,
-    fontSize: 17,
-    fontWeight: '900',
-    color: '#111217',
-  },
-
-  onlinePrice: {
-    marginTop: 4,
-    fontSize: 17,
-    fontWeight: '900',
-    color: '#111217',
-  },
-
-  unitPrice: {
-    marginTop: 2,
-    fontSize: 8,
-    color: '#85868d',
-  },
-
-  retailerName: {
-    marginTop: 2,
-    fontSize: 8,
-    color: '#777982',
-    fontWeight: '700',
-  },
-
-  priceArrow: {
-    paddingHorizontal: 8,
-  },
-
-  priceArrowText: {
-    fontSize: 17,
-    color: '#999aa0',
-    fontWeight: '700',
-  },
-
-  savingBox: {
-    backgroundColor: '#eef8f0',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    alignItems: 'center',
-  },
-
-  savingBoxLabel: {
-    fontSize: 7,
-    fontWeight: '900',
-    color: '#5b7d62',
-    letterSpacing: 0.7,
-  },
-
-  savingBoxAmount: {
-    marginTop: 2,
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#24723a',
-  },
-
-  removeButton: {
-    marginTop: 13,
-    alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 9,
-  },
-
-  removeButtonText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#777982',
-  },
-
-  /* FINISH */
-
-  finishSection: {
-    marginTop: 24,
-    paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#dedee1',
-  },
-
-  finishTitle: {
-    textAlign: 'center',
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#111217',
-  },
-
-  finishDescription: {
-    marginTop: 5,
-    textAlign: 'center',
-    fontSize: 10,
-    color: '#777982',
-  },
-
-  finishButton: {
-    minHeight: 50,
-    backgroundColor: '#e7e8eb',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 13,
-  },
-
-  finishButtonText: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#111217',
-  },
+  backButton: { width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  backArrow: { fontSize: 19, fontWeight: '700' },
+  navTitles: { flex: 1, marginLeft: 14 },
+  navEyebrow: { fontSize: 9, fontWeight: '800', letterSpacing: 1 },
+  navTitle: { fontSize: 19, fontWeight: '800', letterSpacing: -0.4, marginTop: 2 },
+  content: { padding: 20, paddingBottom: 50 },
+  heroSummaryCard: {
+    borderRadius: 24,
+    padding: 22,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  heroHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  heroKicker: { fontSize: 9, fontWeight: '800', letterSpacing: 1 },
+  heroSavingsValue: { color: '#FFFFFF', fontSize: 34, fontWeight: '800', letterSpacing: -1.2, marginTop: 4 },
+  itemCountBadge: { width: 58, height: 58, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  itemCountNumber: { fontSize: 19, fontWeight: '800' },
+  itemCountLabel: { color: '#D7E5DC', fontSize: 8, fontWeight: '800', letterSpacing: 0.6, marginTop: 1 },
+  heroDivider: { height: 1, marginVertical: 18 },
+  breakdownGrid: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  breakdownCell: { flex: 1 },
+  breakdownSeparator: { width: 1, height: 28, marginHorizontal: 12 },
+  breakdownLabel: { color: '#B5C9BC', fontSize: 10, fontWeight: '600' },
+  breakdownValue: { color: '#FFFFFF', fontSize: 17, fontWeight: '800', marginTop: 3 },
+  actionRow: { flexDirection: 'row', gap: 12, marginTop: 14 },
+  actionButton: { flex: 1, borderRadius: 16, borderWidth: 1, padding: 12, flexDirection: 'row', alignItems: 'center' },
+  actionIcon: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  actionIconGlyph: { fontSize: 20, fontWeight: '700', marginTop: -2 },
+  actionIconGlyphSoft: { fontSize: 20, fontWeight: '700', marginTop: -2 },
+  actionTextContainer: { flex: 1, marginLeft: 10 },
+  actionButtonTitle: { fontSize: 12, fontWeight: '800' },
+  actionButtonSubtitle: { fontSize: 10, marginTop: 1 },
+  actionArrow: { fontSize: 15, fontWeight: '700' },
+  sectionHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 26, marginBottom: 12 },
+  sectionTitle: { fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
+  sectionCount: { fontSize: 11, fontWeight: '700' },
+  emptyCard: { borderRadius: 22, borderWidth: 1, padding: 26, alignItems: 'center', marginTop: 4 },
+  emptyIconCircle: { width: 52, height: 52, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  emptyIconGlyph: { fontSize: 28, fontWeight: '700', marginTop: -3 },
+  emptyTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.4 },
+  emptyDescription: { fontSize: 12, textAlign: 'center', lineHeight: 18, marginTop: 6, maxWidth: 280 },
+  emptyButtonStack: { width: '100%', marginTop: 22, gap: 10 },
+  emptyPrimaryButton: { height: 48, borderRadius: 13, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  emptyPrimaryButtonText: { fontSize: 13, fontWeight: '800' },
+  emptyPrimaryButtonArrow: { fontSize: 18, fontWeight: '700' },
+  emptySecondaryButton: { height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  emptySecondaryButtonText: { fontSize: 12, fontWeight: '800' },
+  productList: { gap: 12 },
+  productCard: { borderRadius: 20, borderWidth: 1, padding: 16 },
+  cardTopRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  productIndexBadge: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  productIndexText: { fontSize: 11, fontWeight: '900' },
+  productNameBlock: { flex: 1 },
+  productNameText: { fontSize: 15, fontWeight: '800', lineHeight: 20 },
+  productBrandText: { fontSize: 11, marginTop: 2 },
+  retailerRouteRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 12, padding: 8, paddingHorizontal: 12, marginTop: 12 },
+  retailerPill: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  retailerPillLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+  retailerPillName: { fontSize: 12, fontWeight: '800' },
+  retailerPillPrice: { fontSize: 12, fontWeight: '800' },
+  openRetailerButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8 },
+  openRetailerText: { fontSize: 10, fontWeight: '800' },
+  openRetailerArrow: { fontSize: 11, fontWeight: '800' },
+  priceCompareGrid: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 14, borderWidth: 1, padding: 12, marginTop: 12 },
+  priceCell: { flex: 1 },
+  priceCellLabel: { fontSize: 8, fontWeight: '800', letterSpacing: 0.5 },
+  storePriceValue: { fontSize: 15, fontWeight: '800', marginTop: 2 },
+  onlinePriceValue: { fontSize: 15, fontWeight: '800', marginTop: 2 },
+  unitPriceDetail: { fontSize: 9, marginTop: 1 },
+  compareArrowBox: { paddingHorizontal: 6 },
+  compareArrow: { fontSize: 14, fontWeight: '700' },
+  savingsCell: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center', marginLeft: 6 },
+  savingsCellLabel: { fontSize: 8, fontWeight: '900', letterSpacing: 0.5 },
+  savingsCellValue: { fontSize: 13, fontWeight: '800', marginTop: 1 },
+  cardBottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, paddingTop: 12, borderTopWidth: 1 },
+  quantityStepper: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, padding: 2 },
+  stepperButton: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  stepperButtonText: { fontSize: 15, fontWeight: '800' },
+  stepperValueBox: { paddingHorizontal: 14 },
+  stepperValueText: { fontSize: 13, fontWeight: '800' },
+  removeLink: { paddingVertical: 6, paddingHorizontal: 10 },
+  removeLinkText: { fontSize: 11, fontWeight: '700' },
+  completionCard: { borderRadius: 20, borderWidth: 1, padding: 18, marginTop: 22, gap: 12 },
+  completionTitle: { fontSize: 16, fontWeight: '800' },
+  completionSubtitle: { fontSize: 11, marginTop: 2 },
+  finishTripButton: { height: 48, borderRadius: 12, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  finishTripButtonText: { fontSize: 13, fontWeight: '800' },
+  finishTripButtonArrow: { fontSize: 15, fontWeight: '800' },
+  footerNote: { fontSize: 10, textAlign: 'center', lineHeight: 14, marginTop: 24, paddingHorizontal: 20 },
 });
