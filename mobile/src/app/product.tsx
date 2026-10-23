@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Linking,
   Pressable,
   ScrollView,
@@ -13,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ScreenHeader } from '../components/ScreenHeader';
 import { ThemeToggle, useAppTheme } from '../context/ThemeContext';
 import { useTrip } from '../context/TripContext';
 import {
@@ -32,6 +34,9 @@ export default function ProductScreen() {
     category?: string;
     weight?: string;
     unit?: string;
+    imageUrl?: string;
+    verificationStatus?: string;
+    attribution?: string;
   }>();
 
   const { addProduct, markRetailerOpened } = useTrip();
@@ -42,6 +47,9 @@ export default function ProductScreen() {
   const category = String(params.category ?? '');
   const weight = String(params.weight ?? '');
   const unit = String(params.unit ?? '');
+  const imageUrl = String(params.imageUrl ?? '');
+  const verificationStatus = String(params.verificationStatus ?? '');
+  const attribution = String(params.attribution ?? '');
 
   const [storePrice, setStorePrice] = useState('');
   const [prices, setPrices] = useState<RetailerPrice[]>([]);
@@ -68,7 +76,7 @@ export default function ProductScreen() {
             setSelectedRetailer(getCheapestPrice(result));
           }
         }
-      } catch (err) {
+      } catch {
         if (active) {
           setPrices([]);
         }
@@ -179,31 +187,25 @@ export default function ProductScreen() {
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]}>
-      <View style={[styles.topbar, { borderBottomColor: colors.border, backgroundColor: colors.topbarBg }]}>
-        <Pressable
-          accessibilityLabel="Back to scanner"
-          style={[styles.backButton, { backgroundColor: colors.chipBg }]}
-          onPress={() => router.replace('/scan')}
-        >
-          <Text style={[styles.backArrow, { color: colors.chipText }]}>←</Text>
-        </Pressable>
-        <View style={styles.navTitles}>
-          <Text style={[styles.navEyebrow, { color: colors.textMuted }]}>SHOPTRIP</Text>
-          <Text style={[styles.navTitle, { color: colors.text }]}>Price Comparison</Text>
-        </View>
-
-        <View style={styles.topbarRight}>
-          <ThemeToggle />
-          <Pressable
-            accessibilityLabel="View shopping trip"
-            style={[styles.tripBadge, { backgroundColor: colors.badgeBg }]}
-            onPress={() => router.push('/trip')}
-          >
-            <Text style={[styles.tripBadgeText, { color: colors.badgeText }]}>Trip</Text>
-            <Text style={[styles.tripBadgeArrow, { color: colors.badgeText }]}>→</Text>
-          </Pressable>
-        </View>
-      </View>
+      <ScreenHeader
+        title="Price Comparison"
+        eyebrow="ShopTrip"
+        fallbackRoute="/home"
+        backLabel="Back"
+        rightElement={
+          <View style={styles.topbarRight}>
+            <ThemeToggle />
+            <Pressable
+              accessibilityLabel="View shopping trip"
+              style={[styles.tripBadge, { backgroundColor: colors.badgeBg }]}
+              onPress={() => router.push('/trip')}
+            >
+              <Text style={[styles.tripBadgeText, { color: colors.badgeText }]}>Trip</Text>
+              <Text style={[styles.tripBadgeArrow, { color: colors.badgeText }]}>→</Text>
+            </Pressable>
+          </View>
+        }
+      />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -219,11 +221,23 @@ export default function ProductScreen() {
             <Text style={[styles.barcodeLabel, { color: colors.textMuted }]}>EAN {barcode}</Text>
           </View>
 
-          <Text style={[styles.productNameText, { color: colors.text }]}>{productName}</Text>
-          <Text style={[styles.brandSubtitle, { color: colors.textSecondary }]}>
-            {brand ? `${brand} · ` : ''}
-            {weight ? `${weight} ${unit}` : 'Standard package'}
-          </Text>
+          <View style={styles.productMainRow}>
+            {imageUrl.length > 0 ? (
+              <Image
+                source={{ uri: imageUrl }}
+                style={[styles.productThumb, { borderColor: colors.border }]}
+                resizeMode="contain"
+                accessibilityLabel={productName}
+              />
+            ) : null}
+            <View style={styles.productTitlesCol}>
+              <Text style={[styles.productNameText, { color: colors.text }]}>{productName}</Text>
+              <Text style={[styles.brandSubtitle, { color: colors.textSecondary }]}>
+                {brand ? `${brand} · ` : ''}
+                {weight ? `${weight} ${unit}` : 'Standard package'}
+              </Text>
+            </View>
+          </View>
 
           <View style={[styles.productMetaTags, { borderTopColor: colors.border }]}>
             <View style={[styles.metaTag, { backgroundColor: colors.cardMuted }]}>
@@ -443,6 +457,20 @@ export default function ProductScreen() {
           )}
         </View>
 
+        {/* OPEN FOOD FACTS ATTRIBUTION */}
+        {(verificationStatus === 'OFF_SOURCED' || attribution.length > 0) && (
+          <View style={[styles.attributionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+            <View style={styles.attributionHeader}>
+              <View style={[styles.attrDot, { backgroundColor: colors.accent }]} />
+              <Text style={[styles.attributionTitle, { color: colors.text }]}>Open Food Facts Metadata</Text>
+            </View>
+            <Text style={[styles.attributionText, { color: colors.textSecondary }]}>
+              {attribution ||
+                'Product metadata and package details sourced from Open Food Facts (openfoodfacts.org) under the Open Database License (ODbL). Product images are licensed under Database Contents License (DbCL). Not live merchant pricing.'}
+            </Text>
+          </View>
+        )}
+
         {/* DISCLAIMER */}
         <View style={[styles.disclaimerCard, { backgroundColor: colors.cardMuted }]}>
           <Text style={[styles.disclaimerTitle, { color: colors.textSecondary }]}>Price Verification Notice</Text>
@@ -455,25 +483,15 @@ export default function ProductScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  topbar: {
-    height: 72,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: 1,
-  },
-  backButton: { width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  backArrow: { fontSize: 19, fontWeight: '700' },
-  navTitles: { flex: 1, marginLeft: 14 },
-  navEyebrow: { fontSize: 9, fontWeight: '800', letterSpacing: 1 },
-  navTitle: { fontSize: 19, fontWeight: '800', letterSpacing: -0.4, marginTop: 2 },
   topbarRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   tripBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 12, gap: 4 },
   tripBadgeText: { fontSize: 12, fontWeight: '800' },
   tripBadgeArrow: { fontSize: 13, fontWeight: '700' },
   content: { padding: 20, paddingBottom: 48 },
   productCard: { borderRadius: 22, borderWidth: 1, padding: 20 },
+  productMainRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  productThumb: { width: 64, height: 64, borderRadius: 12, borderWidth: 1, backgroundColor: '#FFFFFF' },
+  productTitlesCol: { flex: 1 },
   cardHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   categoryPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 9 },
   categoryPillText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
@@ -541,7 +559,12 @@ const styles = StyleSheet.create({
   secondaryNavButton: { flex: 1, height: 44, borderRadius: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   secondaryNavText: { fontSize: 12, fontWeight: '800' },
   secondaryNavArrow: { fontSize: 14, fontWeight: '700' },
-  disclaimerCard: { marginTop: 26, padding: 14, borderRadius: 14 },
+  attributionCard: { borderRadius: 16, borderWidth: 1, padding: 14, marginTop: 18 },
+  attributionHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  attrDot: { width: 7, height: 7, borderRadius: 4 },
+  attributionTitle: { fontSize: 11, fontWeight: '800', letterSpacing: 0.4 },
+  attributionText: { fontSize: 11, lineHeight: 16 },
+  disclaimerCard: { marginTop: 14, padding: 14, borderRadius: 14 },
   disclaimerTitle: { fontSize: 10, fontWeight: '800', letterSpacing: 0.6 },
   disclaimerText: { fontSize: 11, lineHeight: 16, marginTop: 4 },
 });

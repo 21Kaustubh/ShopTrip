@@ -11,7 +11,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '../context/AuthContext';
-import { ThemeToggle, useAppTheme } from '../context/ThemeContext';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { useAppTheme } from '../context/ThemeContext';
 import { useTrip, type TripProduct } from '../context/TripContext';
 
 export default function TripScreen() {
@@ -50,7 +51,7 @@ export default function TripScreen() {
           style: 'destructive',
           onPress: () => {
             clearTrip();
-            router.replace('/');
+            router.replace('/home' as any);
           },
         },
       ]
@@ -104,23 +105,12 @@ export default function TripScreen() {
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]}>
       {/* TOP NAVIGATION */}
-      <View style={[styles.topbar, { borderBottomColor: colors.border, backgroundColor: colors.topbarBg }]}>
-        <Pressable
-          accessibilityLabel="Back to home"
-          style={[styles.backButton, { backgroundColor: colors.chipBg }]}
-          onPress={() => router.replace('/')}
-        >
-          <Text style={[styles.backArrow, { color: colors.chipText }]}>←</Text>
-        </Pressable>
-        <View style={styles.navTitles}>
-          <Text style={[styles.navEyebrow, { color: colors.textMuted }]}>
-            {isGuest ? 'GUEST SHOPPING TRIP' : 'ACCOUNT TRIP'}
-          </Text>
-          <Text style={[styles.navTitle, { color: colors.text }]}>Shopping Trip</Text>
-        </View>
-
-        <ThemeToggle />
-      </View>
+      <ScreenHeader
+        title="Shopping Trip"
+        eyebrow={isGuest ? 'GUEST TRIP' : 'ACCOUNT TRIP'}
+        fallbackRoute="/home"
+        backLabel="Back to Home"
+      />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -396,19 +386,6 @@ export default function TripScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  topbar: {
-    height: 72,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: 1,
-  },
-  backButton: { width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  backArrow: { fontSize: 19, fontWeight: '700' },
-  navTitles: { flex: 1, marginLeft: 14 },
-  navEyebrow: { fontSize: 9, fontWeight: '800', letterSpacing: 1 },
-  navTitle: { fontSize: 19, fontWeight: '800', letterSpacing: -0.4, marginTop: 2 },
   content: { padding: 20, paddingBottom: 50 },
   heroSummaryCard: {
     borderRadius: 24,
