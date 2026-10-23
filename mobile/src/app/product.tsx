@@ -87,15 +87,18 @@ export default function ProductScreen() {
         if (active) {
           setComparison(data);
           if (data.verifiedOffers.length > 0) {
-            // Pre-select lowest comparable verified offer
+            // Pre-select lowest comparable verified offer ONLY
             const comparableOffers = data.verifiedOffers.filter(
               (o) => o.isComparableVariant !== false
             );
-            const pool = comparableOffers.length > 0 ? comparableOffers : data.verifiedOffers;
-            const lowest = pool.reduce((min, cur) =>
-              cur.price < min.price ? cur : min
-            );
-            setSelectedVerifiedOffer(lowest);
+            if (comparableOffers.length > 0) {
+              const lowest = comparableOffers.reduce((min, cur) =>
+                cur.price < min.price ? cur : min
+              );
+              setSelectedVerifiedOffer(lowest);
+            } else {
+              setSelectedVerifiedOffer(null);
+            }
           }
         }
       } catch {
@@ -455,10 +458,11 @@ export default function ProductScreen() {
                         Verified Stored Offers ({comparison.verifiedOffers.length})
                       </Text>
                       {comparison.verifiedOffers.map((offer) => {
-                        const isSelected = selectedVerifiedOffer?.id === offer.id;
                         const isOfferComparable = offer.isComparableVariant !== false;
+                        const isSelected = isOfferComparable && selectedVerifiedOffer?.id === offer.id;
+
                         return (
-                          <Pressable
+                          <View
                             key={offer.id || `${offer.retailerName}-${offer.price}`}
                             style={[
                               styles.verifiedOfferCard,
@@ -472,88 +476,189 @@ export default function ProductScreen() {
                                   ? isDark
                                     ? colors.accent
                                     : colors.primaryDark
-                                  : colors.cardBorder,
+                                  : isOfferComparable
+                                    ? colors.cardBorder
+                                    : isDark
+                                      ? '#2E271D'
+                                      : '#F4ECE1',
                               },
                             ]}
-                            onPress={() => {
-                              setSelectedVerifiedOffer(offer);
-                              setAddedToTrip(false);
-                            }}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Select ${offer.retailerName} offer at ₹${offer.price}`}
                           >
-                            <View style={styles.offerSelectRow}>
-                              <View
+                            {/* SELECTION CONTROL: Sibling 1 (Only for comparable offers) */}
+                            {isOfferComparable ? (
+                              <Pressable
+                                style={styles.offerSelectRow}
+                                onPress={() => {
+                                  setSelectedVerifiedOffer(offer);
+                                  setAddedToTrip(false);
+                                }}
+                                accessibilityRole="radio"
+                                accessibilityState={{ selected: isSelected }}
+                                accessibilityLabel={`Select ${offer.retailerName} offer at ₹${offer.price} for savings calculation`}
+                              >
+                                <View
+                                  style={[
+                                    styles.radioCircle,
+                                    {
+                                      borderColor: isSelected
+                                        ? isDark
+                                          ? colors.accent
+                                          : colors.primaryDark
+                                        : colors.border,
+                                      backgroundColor: isSelected
+                                        ? isDark
+                                          ? colors.accent
+                                          : colors.primaryDark
+                                        : 'transparent',
+                                    },
+                                  ]}
+                                >
+                                  {isSelected ? (
+                                    <Text
+                                      style={[
+                                        styles.radioGlyph,
+                                        { color: isDark ? '#142119' : '#FFFFFF' },
+                                      ]}
+                                    >
+                                      ✓
+                                    </Text>
+                                  ) : null}
+                                </View>
+                                <View style={styles.offerMainInfo}>
+                                  <View style={styles.offerHeaderLine}>
+                                    <Text style={[styles.offerRetailerName, { color: colors.text }]}>
+                                      {offer.retailerName}
+                                    </Text>
+                                    <View
+                                      style={[
+                                        styles.matchBadge,
+                                        { backgroundColor: isDark ? '#1F3325' : '#E8F5E9' },
+                                      ]}
+                                    >
+                                      <Text
+                                        style={[
+                                          styles.matchBadgeText,
+                                          { color: isDark ? '#A3E635' : '#1B5E20' },
+                                        ]}
+                                      >
+                                        Exact match ({offer.packSize || sizeInfo || '200 ml'})
+                                      </Text>
+                                    </View>
+                                  </View>
+                                  <Text style={[styles.offerDeliveryText, { color: colors.textSecondary }]}>
+                                    {offer.deliveryTime || 'Standard'} · {offer.source}
+                                  </Text>
+                                  <Text
+                                    style={[
+                                      styles.selectableHint,
+                                      { color: isDark ? colors.accent : colors.primaryDark },
+                                    ]}
+                                  >
+                                    {isSelected
+                                      ? '● Selected for trip savings'
+                                      : '○ Tap to select for trip savings'}
+                                  </Text>
+                                </View>
+                              </Pressable>
+                            ) : (
+                              /* NON-COMPARABLE: Non-interactive View container with warning badge (CANNOT be selected) */
+                              <View style={styles.offerSelectRow}>
+                                <View
+                                  style={[
+                                    styles.radioCircleDisabled,
+                                    { borderColor: colors.border },
+                                  ]}
+                                >
+                                  <Text style={[styles.disabledGlyph, { color: colors.textMuted }]}>
+                                    −
+                                  </Text>
+                                </View>
+                                <View style={styles.offerMainInfo}>
+                                  <View style={styles.offerHeaderLine}>
+                                    <Text
+                                      style={[
+                                        styles.offerRetailerName,
+                                        { color: colors.textSecondary },
+                                      ]}
+                                    >
+                                      {offer.retailerName}
+                                    </Text>
+                                    <View
+                                      style={[
+                                        styles.variantBadge,
+                                        { backgroundColor: isDark ? '#3D2D1B' : '#FFF3E0' },
+                                      ]}
+                                    >
+                                      <Text
+                                        style={[
+                                          styles.variantBadgeText,
+                                          { color: isDark ? '#FBBF24' : '#E65100' },
+                                        ]}
+                                      >
+                                        Different variant — not comparable
+                                      </Text>
+                                    </View>
+                                  </View>
+                                  <Text style={[styles.offerDeliveryText, { color: colors.textMuted }]}>
+                                    {offer.deliveryTime || 'Standard'} · {offer.source}
+                                  </Text>
+                                  <Text
+                                    style={[
+                                      styles.variantWarningText,
+                                      { color: isDark ? '#FBBF24' : '#B45309' },
+                                    ]}
+                                  >
+                                    {offer.variantNote ||
+                                      `Different size (${offer.packSize || 'pack variant'}) — not selectable for 200 ml shelf savings`}
+                                  </Text>
+                                </View>
+                              </View>
+                            )}
+
+                            {/* PRICE & SEPARATE OUTBOUND BUTTON: Sibling 2 */}
+                            <View style={styles.offerPriceCol}>
+                              <Text
                                 style={[
-                                  styles.radioCircle,
+                                  styles.offerPriceVal,
                                   {
-                                    borderColor: isSelected
-                                      ? isDark
-                                        ? colors.accent
-                                        : colors.primaryDark
-                                      : colors.border,
-                                    backgroundColor: isSelected
-                                      ? isDark
-                                        ? colors.accent
-                                        : colors.primaryDark
-                                      : 'transparent',
+                                    color: isOfferComparable ? colors.text : colors.textSecondary,
                                   },
                                 ]}
                               >
-                                {isSelected ? (
-                                  <Text style={[styles.radioGlyph, { color: isDark ? '#142119' : '#FFFFFF' }]}>
-                                    ✓
-                                  </Text>
-                                ) : null}
-                              </View>
-                              <View style={styles.offerMainInfo}>
-                                <View style={styles.offerHeaderLine}>
-                                  <Text style={[styles.offerRetailerName, { color: colors.text }]}>
-                                    {offer.retailerName}
-                                  </Text>
-                                  {isOfferComparable ? (
-                                    <View style={[styles.matchBadge, { backgroundColor: isDark ? '#1F3325' : '#E8F5E9' }]}>
-                                      <Text style={[styles.matchBadgeText, { color: isDark ? '#A3E635' : '#1B5E20' }]}>
-                                        Exact match
-                                      </Text>
-                                    </View>
-                                  ) : (
-                                    <View style={[styles.variantBadge, { backgroundColor: isDark ? '#3D2D1B' : '#FFF3E0' }]}>
-                                      <Text style={[styles.variantBadgeText, { color: isDark ? '#FBBF24' : '#E65100' }]}>
-                                        Different variant
-                                      </Text>
-                                    </View>
-                                  )}
-                                </View>
-                                <Text style={[styles.offerDeliveryText, { color: colors.textSecondary }]}>
-                                  {offer.deliveryTime || 'Standard'} · {offer.source}
-                                </Text>
-                                {!isOfferComparable && (
-                                  <Text style={[styles.variantWarningText, { color: isDark ? '#FBBF24' : '#B45309' }]}>
-                                    {offer.variantNote || 'Different package size — not comparable for shelf savings'}
-                                  </Text>
-                                )}
-                              </View>
-                            </View>
-                            <View style={styles.offerPriceCol}>
-                              <Text style={[styles.offerPriceVal, { color: colors.text }]}>
                                 ₹{offer.price}
                               </Text>
                               <Pressable
-                                style={[styles.viewOfferBtn, { backgroundColor: colors.accent }]}
-                                onPress={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenVerifiedOffer(offer);
-                                }}
+                                style={[
+                                  styles.viewOfferBtn,
+                                  {
+                                    backgroundColor: isOfferComparable
+                                      ? colors.accent
+                                      : isDark
+                                        ? '#233227'
+                                        : colors.cardMuted,
+                                    borderWidth: isOfferComparable ? 0 : 1,
+                                    borderColor: colors.border,
+                                  },
+                                ]}
+                                onPress={() => handleOpenVerifiedOffer(offer)}
                                 accessibilityRole="button"
                                 accessibilityLabel={`Open ${offer.retailerName} merchant page`}
                               >
-                                <Text style={[styles.viewOfferText, { color: colors.accentText }]}>
+                                <Text
+                                  style={[
+                                    styles.viewOfferText,
+                                    {
+                                      color: isOfferComparable
+                                        ? colors.accentText
+                                        : colors.text,
+                                    },
+                                  ]}
+                                >
                                   Open retailer ↗
                                 </Text>
                               </Pressable>
                             </View>
-                          </Pressable>
+                          </View>
                         );
                       })}
                     </View>
@@ -1251,6 +1356,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
+  },
+  radioCircleDisabled: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+    opacity: 0.5,
+  },
+  disabledGlyph: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  selectableHint: {
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 4,
   },
   radioGlyph: {
     fontSize: 12,

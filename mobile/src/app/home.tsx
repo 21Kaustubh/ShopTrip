@@ -11,8 +11,15 @@ import { useTrip } from '../context/TripContext';
 export default function AppHomeScreen() {
   const { colors, isDark } = useAppTheme();
   const { user, isGuest, logout } = useAuth();
-  const { productCount, totalItems } = useTrip();
+  const {
+    productCount,
+    totalItems,
+    totalSavings,
+    persistedSavings,
+    completedTripCount,
+  } = useTrip();
   const hasTrip = productCount > 0;
+  const hasPortfolio = completedTripCount > 0 || persistedSavings > 0;
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -86,7 +93,55 @@ export default function AppHomeScreen() {
           </Pressable>
         </View>
 
-        {/* TRIP STATUS & ITEM COUNT CARD */}
+        {/* PORTFOLIO SAVINGS CARD (Persisted across completed trips) */}
+        {hasPortfolio && (
+          <View
+            style={[
+              styles.portfolioCard,
+              {
+                backgroundColor: isDark ? '#16281F' : '#EAF5EC',
+                borderColor: isDark ? colors.accent : '#A2DBB5',
+              },
+            ]}
+          >
+            <View style={styles.portfolioTop}>
+              <View style={styles.portfolioLeft}>
+                <Text
+                  style={[
+                    styles.portfolioKicker,
+                    { color: isDark ? colors.accent : colors.primaryDark },
+                  ]}
+                >
+                  PORTFOLIO SAVINGS · COMPLETED TRIPS
+                </Text>
+                <Text style={[styles.portfolioValue, { color: colors.text }]}>
+                  ₹{persistedSavings.toFixed(0)}
+                </Text>
+                <Text style={[styles.portfolioCaption, { color: colors.textSecondary }]}>
+                  Projected savings recorded across {completedTripCount} completed trip
+                  {completedTripCount === 1 ? '' : 's'}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.portfolioBadge,
+                  { backgroundColor: isDark ? '#233A2D' : '#D1EBD8' },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.portfolioBadgeText,
+                    { color: isDark ? colors.accent : colors.primaryDark },
+                  ]}
+                >
+                  {completedTripCount} {completedTripCount === 1 ? 'TRIP' : 'TRIPS'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* ACTIVE TRIP STATUS & ITEM COUNT CARD */}
         <Pressable
           style={[
             styles.insightCard,
@@ -106,11 +161,15 @@ export default function AppHomeScreen() {
                 { color: isDark ? colors.accent : colors.primaryDark },
               ]}
             >
-              {hasTrip ? `${productCount} ${productCount === 1 ? 'Product' : 'Products'}` : 'Trip is Empty'}
+              {hasTrip
+                ? totalSavings > 0
+                  ? `₹${totalSavings.toFixed(0)} Potential Savings`
+                  : `${productCount} ${productCount === 1 ? 'Product' : 'Products'}`
+                : 'Trip is Empty'}
             </Text>
             <Text style={[styles.insightCaption, { color: colors.textSecondary }]}>
               {hasTrip
-                ? `${totalItems} total item${totalItems !== 1 ? 's' : ''} organized in your list`
+                ? `${totalItems} total item${totalItems !== 1 ? 's' : ''} in active trip`
                 : 'Scan barcodes or search products to begin'}
             </Text>
           </View>
@@ -346,6 +405,29 @@ const styles = StyleSheet.create({
   },
   heroButtonText: { fontSize: 14, fontWeight: '800' },
   heroButtonArrow: { fontSize: 20, fontWeight: '700' },
+  portfolioCard: {
+    marginTop: 14,
+    padding: 20,
+    borderRadius: 21,
+    borderWidth: 1.5,
+  },
+  portfolioTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  portfolioLeft: { flex: 1, paddingRight: 12 },
+  portfolioKicker: { fontSize: 9, fontWeight: '800', letterSpacing: 0.9 },
+  portfolioValue: { fontSize: 32, fontWeight: '800', letterSpacing: -1.2, marginTop: 3 },
+  portfolioCaption: { fontSize: 11, marginTop: 2 },
+  portfolioBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  portfolioBadgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.6 },
   insightCard: {
     marginTop: 14,
     padding: 20,

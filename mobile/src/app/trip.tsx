@@ -1,5 +1,7 @@
 import { router } from 'expo-router';
+import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Linking,
   Platform,
@@ -29,9 +31,11 @@ export default function TripScreen() {
     increaseQuantity,
     decreaseQuantity,
     removeProduct,
-    clearTrip,
+    completeTrip,
     markRetailerOpened,
   } = useTrip();
+
+  const [isFinishing, setIsFinishing] = useState(false);
 
   const scanAnotherProduct = () => {
     router.push('/scan');
@@ -44,15 +48,41 @@ export default function TripScreen() {
   const finishShoppingTrip = () => {
     Alert.alert(
       'Finish Shopping Trip',
-      'Are you sure you want to complete this trip? This will record your trip and reset the active list.',
+      'Are you sure you want to complete this trip? This will record your trip and projected savings into your portfolio and reset the active list.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Finish Trip',
-          style: 'destructive',
-          onPress: () => {
-            clearTrip();
-            router.replace('/home' as any);
+          text: 'Complete & Save Trip',
+          style: 'default',
+          onPress: async () => {
+            setIsFinishing(true);
+            try {
+              const res = await completeTrip();
+              if (res.success) {
+                Alert.alert(
+                  'Trip Completed!',
+                  'Your shopping trip and savings have been safely recorded in your portfolio.',
+                  [
+                    {
+                      text: 'View Portfolio',
+                      onPress: () => router.replace('/home' as any),
+                    },
+                  ]
+                );
+              } else {
+                Alert.alert(
+                  'Could Not Complete Trip',
+                  res.error || 'Failed to complete trip. Your active list has been kept intact.'
+                );
+              }
+            } catch (err: any) {
+              Alert.alert(
+                'Could Not Complete Trip',
+                err?.message || 'An unexpected error occurred. Your active list is preserved.'
+              );
+            } finally {
+              setIsFinishing(false);
+            }
           },
         },
       ]
@@ -432,15 +462,28 @@ export default function TripScreen() {
               </Text>
             </View>
             <Pressable
-              style={[styles.finishTripButton, { backgroundColor: isDark ? colors.accent : colors.primaryDark }]}
+              style={[
+                styles.finishTripButton,
+                {
+                  backgroundColor: isDark ? colors.accent : colors.primaryDark,
+                  opacity: isFinishing ? 0.7 : 1,
+                },
+              ]}
               onPress={finishShoppingTrip}
+              disabled={isFinishing}
+              accessibilityRole="button"
+              accessibilityLabel="Complete and save shopping trip"
             >
               <Text style={[styles.finishTripButtonText, { color: isDark ? colors.accentText : '#FFFFFF' }]}>
-                Complete & Clear Trip
+                {isFinishing ? 'Saving Trip...' : 'Complete & Save Trip'}
               </Text>
-              <Text style={[styles.finishTripButtonArrow, { color: isDark ? colors.accentText : colors.accent }]}>
-                ✓
-              </Text>
+              {isFinishing ? (
+                <ActivityIndicator size="small" color={isDark ? colors.accentText : '#FFFFFF'} />
+              ) : (
+                <Text style={[styles.finishTripButtonArrow, { color: isDark ? colors.accentText : colors.accent }]}>
+                  ✓
+                </Text>
+              )}
             </Pressable>
           </View>
         )}

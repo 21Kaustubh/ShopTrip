@@ -6,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useAuth } from './AuthContext';
 
 export type PurchaseStatus =
   | 'PLANNED'
@@ -44,13 +45,38 @@ export type TripProduct = {
   retailerOpenedAt: string | null;
 };
 
+export interface CompletedTrip {
+  id: string;
+  name: string;
+  completedAt: string;
+  itemCount: number;
+  totalStorePrice: number;
+  totalOnlinePrice: number;
+  totalSavings: number;
+  items: {
+    barcode: string;
+    productName: string;
+    quantity: number;
+    shelfPrice: number;
+    onlinePrice: number;
+    selectedRetailer: string | null;
+    savings: number;
+    isComparable: boolean;
+  }[];
+}
+
 type TripContextType = {
   products: TripProduct[];
+  completedTrips: CompletedTrip[];
+  persistedSavings: number;
+  completedTripCount: number;
+
   addProduct: (product: TripProduct) => void;
   increaseQuantity: (barcode: string) => void;
   decreaseQuantity: (barcode: string) => void;
   removeProduct: (id: string) => void;
   clearTrip: () => void;
+  completeTrip: (tripName?: string) => Promise<{ success: boolean; error?: string }>;
 
   markRetailerSelected: (
     barcode: string,
@@ -71,33 +97,98 @@ type TripContextType = {
 };
 
 const GUEST_TRIP_KEY = '@shoptrip_guest_trip';
+const COMPLETED_TRIPS_KEY = '@shoptrip_completed_trips';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
 
 const TripContext = createContext<TripContextType | undefined>(undefined);
 
 export function TripProvider({ children }: { children: ReactNode }) {
+  const { token, isGuest } = useAuth();
   const [products, setProducts] = useState<TripProduct[]>([]);
+  const [completedTrips, setCompletedTrips] = useState<CompletedTrip[]>([]);
   const [hasLoaded, setHasLoaded] = useState(false);
 
-  // Restore guest trip from local storage on mount
+  // Restore active trip and completed trips portfolio from local storage on mount
   useEffect(() => {
-    async function loadStoredTrip() {
+    async function loadStoredData() {
       try {
-        const stored = await AsyncStorage.getItem(GUEST_TRIP_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored);
+        const storedTrip = await AsyncStorage.getItem(GUEST_TRIP_KEY);
+        if (storedTrip) {
+          const parsed = JSON.parse(storedTrip);
           if (Array.isArray(parsed)) {
             setProducts(parsed);
           }
         }
+
+        const storedCompleted = await AsyncStorage.getItem(COMPLETED_TRIPS_KEY);
+        if (storedCompleted) {
+          const parsedCompleted = JSON.parse(storedCompleted);
+          if (Array.isArray(parsedCompleted)) {
+            setCompletedTrips(parsedCompleted);
+          }
+        }
       } catch (err) {
-        console.warn('Failed to load stored shopping trip:', err);
+        console.warn('Failed to load stored shopping trip data:', err);
       } finally {
         setHasLoaded(true);
       }
     }
 
-    loadStoredTrip();
+    loadStoredData();
   }, []);
+
+  // For authenticated users, sync completed trips from backend
+  useEffect(() => {
+    if (!token || isGuest) return;
+
+    let active = true;
+    async function syncBackendTrips() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/trips`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
+        if (res.ok && active) {
+          const data = await res.json();
+          if (Array.isArray(data.trips)) {
+            const completedFromBackend: CompletedTrip[] = data.trips
+              .filter((t: any) => t.status === 'COMPLETED')
+              .map((t: any) => ({
+                id: t.id,
+                name: t.name,
+                completedAt: t.updatedAt || t.createdAt,
+                itemCount: t.itemCount || 0,
+                totalStorePrice: 0,
+                totalOnlinePrice: 0,
+                totalSavings: typeof t.totalSavings === 'number' ? t.totalSavings : 0,
+                items: [],
+              }));
+
+            // Merge with local completed trips by ID
+            setCompletedTrips((current) => {
+              const ids = new Set(completedFromBackend.map((b) => b.id));
+              const merged = [
+                ...completedFromBackend,
+                ...current.filter((c) => !ids.has(c.id)),
+              ];
+              AsyncStorage.setItem(COMPLETED_TRIPS_KEY, JSON.stringify(merged)).catch(() => {});
+              return merged;
+            });
+          }
+        }
+      } catch {
+        // Fall back gracefully to local storage
+      }
+    }
+
+    syncBackendTrips();
+
+    return () => {
+      active = false;
+    };
+  }, [token, isGuest]);
 
   // Persist trip to local storage on change (after initial load)
   useEffect(() => {
@@ -302,15 +393,152 @@ export function TripProvider({ children }: { children: ReactNode }) {
     0
   );
 
+  // Complete Trip and Persist to Portfolio
+  const completeTrip = async (tripName?: string): Promise<{ success: boolean; error?: string }> => {
+    if (products.length === 0) {
+      return { success: false, error: 'Cannot complete an empty trip.' };
+    }
+
+    // Calculate valid projected savings from comparable offers ONLY
+    const validTripSavings = products.reduce((total, p) => {
+      const qty = p.quantity ?? 1;
+      if (
+        p.isComparableOffer !== false &&
+        typeof p.storePrice === 'number' &&
+        p.storePrice > 0 &&
+        typeof p.onlinePrice === 'number' &&
+        p.onlinePrice > 0 &&
+        p.storePrice > p.onlinePrice
+      ) {
+        return total + (p.storePrice - p.onlinePrice) * qty;
+      }
+      return total;
+    }, 0);
+
+    const tripStoreTotal = products.reduce((total, p) => {
+      const qty = p.quantity ?? 1;
+      return total + (p.storePrice || 0) * qty;
+    }, 0);
+
+    const tripOnlineTotal = products.reduce((total, p) => {
+      const qty = p.quantity ?? 1;
+      return total + (p.onlinePrice > 0 ? p.onlinePrice * qty : 0);
+    }, 0);
+
+    const newCompletedTrip: CompletedTrip = {
+      id: `trip-${Date.now()}`,
+      name:
+        tripName?.trim() ||
+        `Shopping Trip - ${new Date().toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        })}`,
+      completedAt: new Date().toISOString(),
+      itemCount: products.reduce((sum, p) => sum + (p.quantity || 1), 0),
+      totalStorePrice: tripStoreTotal,
+      totalOnlinePrice: tripOnlineTotal,
+      totalSavings: validTripSavings,
+      items: products.map((p) => ({
+        barcode: p.barcode,
+        productName: p.productName,
+        quantity: p.quantity || 1,
+        shelfPrice: p.storePrice || 0,
+        onlinePrice: p.onlinePrice || 0,
+        selectedRetailer: p.selectedRetailer,
+        savings:
+          p.isComparableOffer !== false && p.storePrice > p.onlinePrice && p.onlinePrice > 0
+            ? p.storePrice - p.onlinePrice
+            : 0,
+        isComparable: p.isComparableOffer !== false,
+      })),
+    };
+
+    // If authenticated, persist to backend FIRST
+    if (!isGuest && token) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/trips/complete`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            name: newCompletedTrip.name,
+            totalSavings: validTripSavings,
+            items: products.map((p) => ({
+              barcode: p.barcode,
+              productName: p.productName,
+              quantity: p.quantity || 1,
+              shelfPrice: p.storePrice || 0,
+              selectedOfferId: p.selectedOfferId || null,
+              isComparableOffer: p.isComparableOffer !== false,
+              savings:
+                p.isComparableOffer !== false && p.storePrice > p.onlinePrice && p.onlinePrice > 0
+                  ? p.storePrice - p.onlinePrice
+                  : 0,
+            })),
+          }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          const errMsg = errData.message || 'Failed to save completed trip to server.';
+          return { success: false, error: errMsg };
+        }
+
+        const data = await res.json();
+        if (data.trip?.id) {
+          newCompletedTrip.id = data.trip.id;
+        }
+      } catch (err: any) {
+        return {
+          success: false,
+          error: err?.message || 'Network error while saving completed trip.',
+        };
+      }
+    }
+
+    // Persist locally for both guest and authenticated sessions
+    const updatedCompleted = [newCompletedTrip, ...completedTrips];
+    setCompletedTrips(updatedCompleted);
+    try {
+      await AsyncStorage.setItem(COMPLETED_TRIPS_KEY, JSON.stringify(updatedCompleted));
+    } catch (e) {
+      console.warn('Failed to save completed trips locally:', e);
+    }
+
+    // ONLY clear active trip AFTER saving succeeds!
+    setProducts([]);
+    try {
+      await AsyncStorage.removeItem(GUEST_TRIP_KEY);
+    } catch (e) {
+      console.warn('Failed to clear active trip:', e);
+    }
+
+    return { success: true };
+  };
+
+  const persistedSavings = completedTrips.reduce(
+    (sum, trip) => sum + (typeof trip.totalSavings === 'number' ? trip.totalSavings : 0),
+    0
+  );
+
+  const completedTripCount = completedTrips.length;
+
   return (
     <TripContext.Provider
       value={{
         products,
+        completedTrips,
+        persistedSavings,
+        completedTripCount,
         addProduct,
         increaseQuantity,
         decreaseQuantity,
         removeProduct,
         clearTrip,
+        completeTrip,
         markRetailerSelected,
         markRetailerOpened,
         markPurchased,

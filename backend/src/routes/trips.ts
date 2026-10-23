@@ -9,7 +9,7 @@ tripsRouter.use(authenticateToken);
 
 /*
  * GET /api/trips
- * List all shopping trips belonging to authenticated user.
+ * List all shopping trips belonging to authenticated user with calculated portfolio savings.
  */
 tripsRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
@@ -21,23 +21,108 @@ tripsRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<v
         _count: {
           select: { items: true },
         },
+        items: {
+          include: {
+            selectedOffer: true,
+            product: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    res.json({
-      trips: trips.map((trip) => ({
+    const enrichedTrips = trips.map((trip) => {
+      let tripSavings = 0;
+      for (const item of trip.items) {
+        // Calculate projected savings: max(0, shelfPrice - comparableOfferPrice) * quantity
+        // Only if comparable and shelf price is higher than offer price
+        const isComparable = !item.selectedOffer?.deliveryTime?.toLowerCase().includes('not comparable');
+        if (
+          item.shelfPrice !== null &&
+          item.selectedOffer &&
+          isComparable &&
+          item.shelfPrice > item.selectedOffer.price
+        ) {
+          tripSavings += (item.shelfPrice - item.selectedOffer.price) * item.quantity;
+        }
+      }
+
+      return {
         id: trip.id,
         name: trip.name,
         status: trip.status,
         itemCount: trip._count.items,
+        totalSavings: tripSavings,
         createdAt: trip.createdAt,
         updatedAt: trip.updatedAt,
-      })),
+      };
+    });
+
+    const completedTrips = enrichedTrips.filter((t) => t.status === 'COMPLETED');
+    const portfolioSavings = completedTrips.reduce((sum, t) => sum + t.totalSavings, 0);
+
+    res.json({
+      trips: enrichedTrips,
+      portfolioSavings,
+      completedTripCount: completedTrips.length,
     });
   } catch (error) {
     console.error('List trips error:', error);
     res.status(500).json({ error: 'ServerError', message: 'Failed to list shopping trips.' });
+  }
+});
+
+/*
+ * POST /api/trips/complete
+ * Record a completed shopping trip with its items and verified savings.
+ */
+tripsRouter.post('/complete', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.userId;
+    const { name, items, totalSavings } = req.body;
+
+    const trip = await prisma.shoppingTrip.create({
+      data: {
+        userId,
+        name: name ? String(name).trim() : `Shopping Trip - ${new Date().toLocaleDateString('en-IN')}`,
+        status: 'COMPLETED',
+      },
+    });
+
+    if (Array.isArray(items) && items.length > 0) {
+      for (const item of items) {
+        let productId = item.productId;
+        if (!productId && item.barcode) {
+          const found = await prisma.product.findUnique({
+            where: { barcode: String(item.barcode).trim() },
+          });
+          if (found) {
+            productId = found.id;
+          }
+        }
+
+        if (productId) {
+          await prisma.tripItem.create({
+            data: {
+              tripId: trip.id,
+              productId,
+              quantity: typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1,
+              shelfPrice: typeof item.shelfPrice === 'number' ? item.shelfPrice : null,
+              selectedOfferId: item.selectedOfferId || null,
+            },
+          });
+        }
+      }
+    }
+
+    res.status(201).json({
+      success: true,
+      trip,
+      message: 'Shopping trip completed and recorded successfully.',
+    });
+  } catch (error) {
+    console.error('Complete trip error:', error);
+    res.status(500).json({ error: 'ServerError', message: 'Failed to record completed shopping trip.' });
   }
 });
 
