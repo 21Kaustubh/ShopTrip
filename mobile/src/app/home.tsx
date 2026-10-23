@@ -11,7 +11,7 @@ import { useTrip } from '../context/TripContext';
 export default function AppHomeScreen() {
   const { colors, isDark } = useAppTheme();
   const { user, isGuest, logout } = useAuth();
-  const { productCount, totalItems, totalSavings } = useTrip();
+  const { productCount, totalItems } = useTrip();
   const hasTrip = productCount > 0;
 
   return (
@@ -67,13 +67,13 @@ export default function AppHomeScreen() {
         {/* HERO CARD */}
         <View style={[styles.hero, { backgroundColor: colors.heroBg }]}>
           <Text style={[styles.eyebrow, { color: colors.heroKicker }]}>
-            SMARTER SHOPPING, ONE TRIP AT A TIME
+            SCAN · COMPARE · PLAN YOUR TRIP
           </Text>
           <Text style={[styles.heroTitle, { color: colors.heroText }]}>
-            Spend with{`\n`}clarity.
+            Shop with{`\n`}clarity.
           </Text>
           <Text style={styles.heroDescription}>
-            Scan barcodes at the shelf, evaluate recorded retailer options, and build a trip that makes financial sense.
+            Scan barcodes, browse retailer options, and build a trip that makes sense before you commit.
           </Text>
           <Pressable
             style={[styles.heroButton, { backgroundColor: colors.accent }]}
@@ -86,16 +86,19 @@ export default function AppHomeScreen() {
           </Pressable>
         </View>
 
-        {/* TRIP SAVINGS INSIGHT CARD */}
-        <View
+        {/* TRIP STATUS & ITEM COUNT CARD */}
+        <Pressable
           style={[
             styles.insightCard,
             { backgroundColor: colors.card, borderColor: colors.cardBorder },
           ]}
+          onPress={() => router.push('/trip')}
+          accessibilityRole="button"
+          accessibilityLabel="Open shopping trip"
         >
           <View>
             <Text style={[styles.insightLabel, { color: colors.textMuted }]}>
-              POTENTIAL SAVINGS
+              {hasTrip ? 'ACTIVE SHOPPING TRIP' : 'SHOPPING TRIP STATUS'}
             </Text>
             <Text
               style={[
@@ -103,10 +106,12 @@ export default function AppHomeScreen() {
                 { color: isDark ? colors.accent : colors.primaryDark },
               ]}
             >
-              ₹{totalSavings.toFixed(0)}
+              {hasTrip ? `${productCount} ${productCount === 1 ? 'Product' : 'Products'}` : 'Trip is Empty'}
             </Text>
             <Text style={[styles.insightCaption, { color: colors.textSecondary }]}>
-              {hasTrip ? 'Across your active shopping trip' : 'Your trip starts here'}
+              {hasTrip
+                ? `${totalItems} total item${totalItems !== 1 ? 's' : ''} organized in your list`
+                : 'Scan barcodes or search products to begin'}
             </Text>
           </View>
           <View style={[styles.insightBadge, { backgroundColor: colors.badgeBg }]}>
@@ -117,7 +122,7 @@ export default function AppHomeScreen() {
               {totalItems === 1 ? 'ITEM' : 'ITEMS'}
             </Text>
           </View>
-        </View>
+        </Pressable>
 
         {/* SECTION HEADING */}
         <View style={styles.sectionHeading}>
@@ -181,6 +186,36 @@ export default function AppHomeScreen() {
             </View>
             <Text style={[styles.secondaryArrow, { color: colors.textSecondary }]}>→</Text>
           </Pressable>
+
+          <Pressable
+            style={[
+              styles.secondaryAction,
+              {
+                backgroundColor: hasTrip
+                  ? isDark ? '#1C2C24' : '#EAF3EC'
+                  : colors.cardMuted,
+              },
+            ]}
+            onPress={() => router.push('/trip')}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: colors.chipBg }]}>
+              <Text style={[styles.secondaryGlyph, { color: colors.chipText }]}>✓</Text>
+            </View>
+            <View style={styles.actionCopy}>
+              <Text style={[styles.secondaryActionTitle, { color: colors.text }]}>
+                My Trip
+              </Text>
+              <Text
+                style={[
+                  styles.secondaryActionSubtitle,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                {hasTrip ? `${totalItems} item${totalItems !== 1 ? 's' : ''} in your current trip` : 'Start a shopping trip list'}
+              </Text>
+            </View>
+            <Text style={[styles.secondaryArrow, { color: colors.textSecondary }]}>→</Text>
+          </Pressable>
         </View>
 
         {/* HOW IT WORKS */}
@@ -209,7 +244,7 @@ export default function AppHomeScreen() {
             <Step
               number="02"
               title="Compare"
-              body="Review verified recorded retailer offers in one clear view."
+              body="Open each retailer directly to check live pricing and availability."
               accentColor={colors.accent}
             />
             <View
@@ -259,7 +294,7 @@ function Step({
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  content: { paddingHorizontal: 20, paddingBottom: 40, maxWidth: 800, alignSelf: 'center', width: '100%' },
+  content: { paddingHorizontal: 20, paddingBottom: 40, maxWidth: 900, alignSelf: 'center', width: '100%' },
   topbar: {
     paddingTop: 10,
     minHeight: 72,

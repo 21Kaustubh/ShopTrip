@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import {
   Alert,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -64,11 +65,19 @@ export default function TripScreen() {
     const retailerUrls: Record<string, string> = {
       Blinkit: `https://blinkit.com/s/?q=${query}`,
       Zepto: `https://www.zeptonow.com/search?query=${query}`,
+      Instamart: `https://www.swiggy.com/instamart/search?query=${query}`,
       Amazon: `https://www.amazon.in/s?k=${query}`,
+      'Amazon India': `https://www.amazon.in/s?k=${query}`,
+      'Amazon Now': `https://www.amazon.in/s?k=${query}&i=nowstore`,
       BigBasket: `https://www.bigbasket.com/ps/?q=${query}`,
       Flipkart: `https://www.flipkart.com/search?q=${query}`,
-      'Flipkart Minutes': `https://www.flipkart.com/search?q=${query}`,
-      Instamart: `https://www.swiggy.com/instamart/search?query=${query}`,
+      'Flipkart Minutes': `https://www.flipkart.com/search?q=${query}&marketplace=FLIPKART`,
+      'DMart Ready': `https://www.dmartready.com/manage/search/result?query=${query}`,
+      JioMart: `https://www.jiomart.com/search/${query}`,
+      Myntra: `https://www.myntra.com/${query}`,
+      AJIO: `https://www.ajio.com/search/?text=${query}`,
+      Nykaa: `https://www.nykaa.com/search/result/?q=${query}`,
+      GrocersLocal: `https://www.google.com/search?q=${encodeURIComponent(`${product.productName} GrocersLocal`)}`,
     };
 
     const targetUrl =
@@ -76,6 +85,13 @@ export default function TripScreen() {
       `https://www.google.com/search?q=${encodeURIComponent(`${product.productName} ${retailer}`)}`;
 
     try {
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined') {
+          window.open(targetUrl, '_blank', 'noopener,noreferrer');
+          markRetailerOpened(product.barcode);
+          return;
+        }
+      }
       const supported = await Linking.canOpenURL(targetUrl);
       if (supported) {
         await Linking.openURL(targetUrl);
@@ -233,7 +249,17 @@ export default function TripScreen() {
               const productStoreTotal = (product.storePrice || 0) * quantity;
               const hasOnlineOffer = typeof product.onlinePrice === 'number' && product.onlinePrice > 0;
               const productOnlineTotal = hasOnlineOffer ? product.onlinePrice * quantity : 0;
-              const productSavingsTotal = (product.savings || 0) * quantity;
+              const isComparable = product.isComparableOffer !== false;
+
+              // Price difference calculations
+              const isShelfCheaper = hasOnlineOffer && product.onlinePrice > product.storePrice;
+              const priceHigherDiff = isShelfCheaper ? (product.onlinePrice - product.storePrice) * quantity : 0;
+              const productSavingsTotal =
+                isComparable && !isShelfCheaper && hasOnlineOffer && product.storePrice > product.onlinePrice
+                  ? (product.storePrice - product.onlinePrice) * quantity
+                  : 0;
+              const isPriceMatch = hasOnlineOffer && product.storePrice === product.onlinePrice;
+
               const retailerToUse = product.selectedRetailer || product.cheapestRetailer;
 
               return (
@@ -263,7 +289,7 @@ export default function TripScreen() {
                   {hasOnlineOffer && (
                     <View style={[styles.retailerRouteRow, { backgroundColor: colors.cardMuted }]}>
                       <View style={styles.retailerPill}>
-                        <Text style={[styles.retailerPillLabel, { color: colors.textMuted }]}>BUY FROM</Text>
+                        <Text style={[styles.retailerPillLabel, { color: colors.textMuted }]}>SELECTED RETAILER</Text>
                         <Text style={[styles.retailerPillName, { color: colors.text }]}>{retailerToUse}</Text>
                         <Text style={[styles.retailerPillPrice, { color: isDark ? colors.accent : colors.primaryDark }]}>
                           ₹{product.onlinePrice.toFixed(0)}
@@ -273,8 +299,10 @@ export default function TripScreen() {
                       <Pressable
                         style={[styles.openRetailerButton, { backgroundColor: colors.chipBg }]}
                         onPress={() => openRetailerLink(product)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Open ${retailerToUse}`}
                       >
-                        <Text style={[styles.openRetailerText, { color: colors.chipText }]}>External Store</Text>
+                        <Text style={[styles.openRetailerText, { color: colors.chipText }]}>Open retailer</Text>
                         <Text style={[styles.openRetailerArrow, { color: colors.chipText }]}>↗</Text>
                       </Pressable>
                     </View>
@@ -297,23 +325,66 @@ export default function TripScreen() {
                     </View>
 
                     <View style={styles.priceCell}>
-                      <Text style={[styles.priceCellLabel, { color: colors.textMuted }]}>BEST ONLINE</Text>
+                      <Text style={[styles.priceCellLabel, { color: colors.textMuted }]}>
+                        {hasOnlineOffer ? retailerToUse.toUpperCase() : 'ONLINE OFFER'}
+                      </Text>
                       <Text style={[styles.onlinePriceValue, { color: colors.text }]}>
                         {hasOnlineOffer ? `₹${productOnlineTotal.toFixed(0)}` : 'Price unavailable'}
                       </Text>
                       <Text style={[styles.unitPriceDetail, { color: colors.textMuted }]}>
-                        {hasOnlineOffer ? `₹${product.onlinePrice.toFixed(0)} × ${quantity}` : 'No offers listed'}
+                        {hasOnlineOffer ? `₹${product.onlinePrice.toFixed(0)} × ${quantity}` : 'No offer selected'}
                       </Text>
                     </View>
 
-                    {productSavingsTotal > 0 && (
+                    {/* COMPARISON / SAVINGS BADGE */}
+                    {!isComparable ? (
+                      <View style={[styles.variantWarningCell, { backgroundColor: isDark ? '#3E2F1C' : '#FFF3E0' }]}>
+                        <Text style={[styles.savingsCellLabel, { color: isDark ? '#FBBF24' : '#E65100' }]}>VARIANT</Text>
+                        <Text style={[styles.variantCellNote, { color: isDark ? '#FBBF24' : '#B45309' }]}>
+                          Not comparable
+                        </Text>
+                      </View>
+                    ) : productSavingsTotal > 0 ? (
                       <View style={[styles.savingsCell, { backgroundColor: colors.badgeBg }]}>
                         <Text style={[styles.savingsCellLabel, { color: colors.badgeText }]}>SAVINGS</Text>
                         <Text style={[styles.savingsCellValue, { color: colors.badgeText }]}>
                           ₹{productSavingsTotal.toFixed(0)}
                         </Text>
                       </View>
-                    )}
+                    ) : isShelfCheaper ? (
+                      <View style={[styles.higherPriceCell, { backgroundColor: isDark ? '#3D2525' : '#FDE8E8' }]}>
+                        <Text style={[styles.savingsCellLabel, { color: isDark ? '#FCA5A5' : '#9B1C1C' }]}>ONLINE HIGHER</Text>
+                        <Text style={[styles.higherCellValue, { color: isDark ? '#FCA5A5' : '#9B1C1C' }]}>
+                          +₹{priceHigherDiff.toFixed(0)}
+                        </Text>
+                      </View>
+                    ) : isPriceMatch ? (
+                      <View style={[styles.savingsCell, { backgroundColor: colors.chipBg }]}>
+                        <Text style={[styles.savingsCellLabel, { color: colors.chipText }]}>MATCH</Text>
+                        <Text style={[styles.savingsCellValue, { color: colors.chipText }]}>₹0</Text>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  {/* DETAIL EXPLANATION NOTE */}
+                  <View style={styles.evaluationRow}>
+                    {!isComparable ? (
+                      <Text style={[styles.evaluationNote, { color: isDark ? '#FBBF24' : '#B45309' }]}>
+                        Selected offer is a different pack variant. Projected savings against in-store shelf price cannot be calculated.
+                      </Text>
+                    ) : productSavingsTotal > 0 ? (
+                      <Text style={[styles.evaluationNote, { color: isDark ? colors.accent : colors.primaryDark }]}>
+                        Projected savings: ₹{productSavingsTotal.toFixed(0)} by purchasing from {retailerToUse} instead of in-store shelf tag.
+                      </Text>
+                    ) : isShelfCheaper ? (
+                      <Text style={[styles.evaluationNote, { color: isDark ? '#FCA5A5' : '#9B1C1C' }]}>
+                        ₹{priceHigherDiff.toFixed(0)} higher than shelf price — in-store purchase is cheaper.
+                      </Text>
+                    ) : isPriceMatch ? (
+                      <Text style={[styles.evaluationNote, { color: colors.textSecondary }]}>
+                        In-store shelf price matches online offer price.
+                      </Text>
+                    ) : null}
                   </View>
 
                   {/* QUANTITY CONTROLS & REMOVE */}
@@ -457,6 +528,12 @@ const styles = StyleSheet.create({
   savingsCell: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center', marginLeft: 6 },
   savingsCellLabel: { fontSize: 8, fontWeight: '900', letterSpacing: 0.5 },
   savingsCellValue: { fontSize: 13, fontWeight: '800', marginTop: 1 },
+  variantWarningCell: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 6, alignItems: 'center', marginLeft: 6 },
+  variantCellNote: { fontSize: 10, fontWeight: '800', marginTop: 1 },
+  higherPriceCell: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 6, alignItems: 'center', marginLeft: 6 },
+  higherCellValue: { fontSize: 12, fontWeight: '800', marginTop: 1 },
+  evaluationRow: { marginTop: 10, paddingHorizontal: 2 },
+  evaluationNote: { fontSize: 11, fontWeight: '600', lineHeight: 16 },
   cardBottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, paddingTop: 12, borderTopWidth: 1 },
   quantityStepper: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, padding: 2 },
   stepperButton: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },

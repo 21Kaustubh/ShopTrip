@@ -32,6 +32,9 @@ export type TripProduct = {
   cheapestRetailer: string;
   savings: number;
 
+  isComparableOffer?: boolean;
+  selectedOfferId?: string | null;
+
   quantity: number;
 
   selectedRetailer: string | null;
@@ -49,7 +52,13 @@ type TripContextType = {
   removeProduct: (id: string) => void;
   clearTrip: () => void;
 
-  markRetailerSelected: (barcode: string, retailer: string) => void;
+  markRetailerSelected: (
+    barcode: string,
+    retailer: string,
+    onlinePrice?: number,
+    isComparable?: boolean,
+    savings?: number
+  ) => void;
   markRetailerOpened: (barcode: string) => void;
   markPurchased: (barcode: string, purchasedQuantity: number) => void;
   updatePurchaseStatus: (barcode: string, status: PurchaseStatus) => void;
@@ -116,7 +125,15 @@ export function TripProvider({ children }: { children: ReactNode }) {
           item.barcode === product.barcode
             ? {
                 ...item,
-                quantity: (item.quantity ?? 1) + 1,
+                quantity: (item.quantity ?? 1) + (product.quantity || 1),
+                storePrice: product.storePrice > 0 ? product.storePrice : item.storePrice,
+                onlinePrice: product.onlinePrice > 0 ? product.onlinePrice : item.onlinePrice,
+                cheapestRetailer: product.cheapestRetailer || item.cheapestRetailer,
+                selectedRetailer: product.selectedRetailer || item.selectedRetailer,
+                savings: product.savings,
+                isComparableOffer: product.isComparableOffer ?? item.isComparableOffer,
+                selectedOfferId: product.selectedOfferId ?? item.selectedOfferId,
+                purchaseStatus: product.selectedRetailer ? 'RETAILER_SELECTED' : item.purchaseStatus,
               }
             : item
         );
@@ -129,7 +146,7 @@ export function TripProvider({ children }: { children: ReactNode }) {
           quantity: product.quantity || 1,
           selectedRetailer: product.selectedRetailer ?? null,
           purchasedQuantity: product.purchasedQuantity ?? 0,
-          purchaseStatus: product.purchaseStatus ?? 'PLANNED',
+          purchaseStatus: product.purchaseStatus ?? (product.selectedRetailer ? 'RETAILER_SELECTED' : 'PLANNED'),
           retailerBuyClicked: product.retailerBuyClicked ?? false,
           retailerOpenedAt: product.retailerOpenedAt ?? null,
         },
@@ -173,17 +190,34 @@ export function TripProvider({ children }: { children: ReactNode }) {
     setProducts([]);
   };
 
-  const markRetailerSelected = (barcode: string, retailer: string) => {
+  const markRetailerSelected = (
+    barcode: string,
+    retailer: string,
+    onlinePrice?: number,
+    isComparable?: boolean,
+    savings?: number
+  ) => {
     setProducts((currentProducts) =>
-      currentProducts.map((product) =>
-        product.barcode === barcode
-          ? {
-              ...product,
-              selectedRetailer: retailer,
-              purchaseStatus: 'RETAILER_SELECTED',
-            }
-          : product
-      )
+      currentProducts.map((product) => {
+        if (product.barcode !== barcode) return product;
+        const newOnlinePrice = typeof onlinePrice === 'number' ? onlinePrice : product.onlinePrice;
+        const newComparable = typeof isComparable === 'boolean' ? isComparable : product.isComparableOffer;
+        const newSavings =
+          typeof savings === 'number'
+            ? savings
+            : newComparable !== false && product.storePrice > 0 && newOnlinePrice > 0
+              ? Math.max(0, product.storePrice - newOnlinePrice)
+              : 0;
+
+        return {
+          ...product,
+          selectedRetailer: retailer,
+          onlinePrice: newOnlinePrice,
+          isComparableOffer: newComparable,
+          savings: newSavings,
+          purchaseStatus: 'RETAILER_SELECTED',
+        };
+      })
     );
   };
 
@@ -230,11 +264,21 @@ export function TripProvider({ children }: { children: ReactNode }) {
   };
 
   // Price Integrity Calculations
-  // Total Savings: only calculated when online price is valid (> 0) and savings > 0
+  // Total Savings: max(0, enteredShelfPrice - selectedComparableOfferPrice) * quantity
+  // Only calculated when isComparableOffer is not false, shelf price is valid, and online price is valid (> 0)
   const totalSavings = products.reduce((total, product) => {
     const qty = product.quantity ?? 1;
-    const savingPerUnit = typeof product.savings === 'number' && product.savings > 0 ? product.savings : 0;
-    return total + savingPerUnit * qty;
+    if (
+      product.isComparableOffer !== false &&
+      typeof product.storePrice === 'number' &&
+      product.storePrice > 0 &&
+      typeof product.onlinePrice === 'number' &&
+      product.onlinePrice > 0
+    ) {
+      const savingPerUnit = Math.max(0, product.storePrice - product.onlinePrice);
+      return total + savingPerUnit * qty;
+    }
+    return total;
   }, 0);
 
   // Total Store Price: sum of shelf price * quantity

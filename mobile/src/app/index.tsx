@@ -1,6 +1,9 @@
 import { router } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import {
+  Alert,
+  Linking,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,6 +24,8 @@ export default function LandingPage() {
   const { productCount } = useTrip();
   const { width } = useWindowDimensions();
 
+  const [activeModal, setActiveModal] = useState<'privacy' | 'terms' | null>(null);
+
   const isWide = width >= 768;
   const hasActiveSession = Boolean(user) || productCount > 0;
 
@@ -29,6 +34,25 @@ export default function LandingPage() {
       router.push('/home' as any);
     } else {
       router.push('/welcome' as any);
+    }
+  };
+
+  const contactEmail = process.env.EXPO_PUBLIC_CONTACT_EMAIL || 'support@shoptrip.in';
+  const handleContactUs = async () => {
+    const mailto = `mailto:${contactEmail}?subject=ShopTrip%20Inquiry%20%26%20Feedback`;
+    const fallbackUrl = 'https://github.com/kaus2/ShopTrip/issues';
+    try {
+      const supported = await Linking.canOpenURL(mailto);
+      if (supported) {
+        await Linking.openURL(mailto);
+      } else {
+        await Linking.openURL(fallbackUrl);
+      }
+    } catch {
+      Alert.alert(
+        'Contact ShopTrip',
+        `For support, inquiries, and retailer suggestions, reach us at:\n\n${contactEmail}`
+      );
     }
   };
 
@@ -109,23 +133,23 @@ export default function LandingPage() {
             </View>
 
             <Text style={[styles.heroHeadline, { color: colors.heroText }]}>
-              Smarter shopping,{'\n'}before you check out.
+              Scan it. Compare it.{'\n'}Shop smarter.
             </Text>
 
             <Text style={styles.heroLead}>
-              ShopTrip helps you scan items in the aisle, check verified retailer alternatives,
-              and build an organized trip before you reach the register.
+              ShopTrip identifies products by barcode, helps compare available retailer options, and organises your shopping trip — all in one place.
             </Text>
 
             <View style={styles.heroCtaGroup}>
               <Pressable
                 style={[styles.primaryCtaButton, { backgroundColor: colors.accent }]}
-                onPress={handleStartShopping}
+                onPress={() => router.push('/scan' as any)}
                 accessibilityRole="button"
-                accessibilityLabel="Start Shopping with ShopTrip"
+                accessibilityLabel="Scan a product barcode with camera"
               >
+                <Text style={styles.primaryCtaIcon}>📷</Text>
                 <Text style={[styles.primaryCtaText, { color: colors.accentText }]}>
-                  {hasActiveSession ? 'Continue Shopping' : 'Start Shopping'}
+                  Scan a Product
                 </Text>
                 <Text style={[styles.primaryCtaArrow, { color: colors.accentText }]}>
                   →
@@ -137,11 +161,11 @@ export default function LandingPage() {
                   styles.secondaryCtaPill,
                   { borderColor: 'rgba(255,255,255,0.25)' },
                 ]}
-                onPress={() => router.push('/welcome' as any)}
+                onPress={() => router.push('/search' as any)}
                 accessibilityRole="button"
-                accessibilityLabel="Guest Access"
+                accessibilityLabel="Search product catalogue"
               >
-                <Text style={styles.secondaryCtaText}>Guest Mode Available</Text>
+                <Text style={styles.secondaryCtaText}>Search Products</Text>
               </Pressable>
             </View>
           </View>
@@ -149,6 +173,13 @@ export default function LandingPage() {
           {/* Right Column: Purposeful Vector/UI Illustration */}
           <View style={[styles.heroVisualColumn, isWide && styles.heroVisualColumnWide]}>
             <View style={[styles.mockDevice, { backgroundColor: isDark ? '#14201A' : '#17382D' }]}>
+              {/* Illustrative Preview Badge */}
+              <View style={[styles.previewTagPill, { backgroundColor: isDark ? 'rgba(216, 242, 138, 0.15)' : 'rgba(216, 242, 138, 0.25)' }]}>
+                <Text style={[styles.previewTagText, { color: colors.heroKicker }]}>
+                  ILLUSTRATIVE PREVIEW · NO LIVE PRICES
+                </Text>
+              </View>
+
               {/* Floating Item Scanner Badge */}
               <View style={[styles.scannerBadge, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
                 <View style={styles.scannerBadgeIcon}>
@@ -164,47 +195,36 @@ export default function LandingPage() {
                 </View>
               </View>
 
-              {/* Product Comparison Demonstration Card */}
-              <View style={[styles.compareDemoCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+              {/* Functional Search Preview Card */}
+              <Pressable
+                style={[styles.compareDemoCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+                onPress={() => router.push({ pathname: '/search', params: { q: 'Tata Salt' } } as any)}
+                accessibilityRole="button"
+                accessibilityLabel="Search Tata Salt in catalogue"
+              >
                 <View style={styles.compareCardHeader}>
                   <Text style={[styles.compareProductTitle, { color: colors.text }]}>
-                    Instant Roast Coffee (100g)
+                    Tata Salt (1 kg)
                   </Text>
                   <View style={[styles.categoryPill, { backgroundColor: colors.badgeBg }]}>
-                    <Text style={[styles.categoryPillText, { color: colors.badgeText }]}>Coffee & Tea</Text>
+                    <Text style={[styles.categoryPillText, { color: colors.badgeText }]}>Staples</Text>
                   </View>
                 </View>
-
-                {/* Price Split */}
                 <View style={[styles.compareSplitRow, { backgroundColor: colors.cardMuted }]}>
-                  <View style={styles.comparePriceCell}>
-                    <Text style={[styles.comparePriceLabel, { color: colors.textMuted }]}>IN-STORE SHELF</Text>
-                    <Text style={[styles.shelfPriceValue, { color: colors.textSecondary }]}>₹385</Text>
-                  </View>
-                  <Text style={[styles.splitArrow, { color: colors.textMuted }]}>→</Text>
-                  <View style={styles.comparePriceCell}>
-                    <Text style={[styles.comparePriceLabel, { color: colors.textMuted }]}>BEST RECORDED</Text>
-                    <Text style={[styles.bestPriceValue, { color: isDark ? colors.accent : colors.primaryDark }]}>
-                      ₹320
-                    </Text>
-                  </View>
+                  <Text style={[styles.comparePriceLabel, { color: colors.textMuted }]}>
+                    Tap to search in catalogue ↗
+                  </Text>
                 </View>
-              </View>
+              </Pressable>
 
-              {/* Active Trip Checklist Snippet */}
+              {/* Illustrative Trip Card (no fabricated items) */}
               <View style={[styles.tripSnippetCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
                 <Text style={[styles.tripSnippetHeading, { color: colors.textMuted }]}>
-                  ACTIVE TRIP CHECKLIST
+                  YOUR SHOPPING TRIP
                 </Text>
                 <View style={styles.checkRow}>
                   <Text style={[styles.checkMark, { color: isDark ? colors.accent : colors.primaryDark }]}>✓</Text>
-                  <Text style={[styles.checkLabel, { color: colors.text }]}>Classic Assam Tea (250g)</Text>
-                  <Text style={[styles.checkQty, { color: colors.textSecondary }]}>qty 1</Text>
-                </View>
-                <View style={styles.checkRow}>
-                  <Text style={[styles.checkMark, { color: isDark ? colors.accent : colors.primaryDark }]}>✓</Text>
-                  <Text style={[styles.checkLabel, { color: colors.text }]}>Whole Grain Rolled Oats (1kg)</Text>
-                  <Text style={[styles.checkQty, { color: colors.textSecondary }]}>qty 2</Text>
+                  <Text style={[styles.checkLabel, { color: colors.textSecondary }]}>Scan barcodes or search to add items</Text>
                 </View>
               </View>
             </View>
@@ -212,14 +232,14 @@ export default function LandingPage() {
         </View>
 
         {/* ==================================================================== */}
-        {/* 3. HOW IT WORKS (3 CONCISE STEPS)                                    */}
+        {/* 3. HOW IT WORKS (SCAN -> COMPARE -> PLAN)                            */}
         {/* ==================================================================== */}
         <View style={styles.sectionBlock}>
           <Text style={[styles.sectionEyebrow, { color: colors.textMuted }]}>
             HOW SHOPTRIP WORKS
           </Text>
           <Text style={[styles.sectionHeading, { color: colors.text }]}>
-            Three steps to confident shopping
+            Scan → Compare → Plan
           </Text>
 
           <View style={[styles.stepsGrid, isWide && styles.stepsGridWide]}>
@@ -228,10 +248,10 @@ export default function LandingPage() {
                 <Text style={[styles.stepNumText, { color: colors.accent }]}>01</Text>
               </View>
               <Text style={[styles.stepTitle, { color: colors.text }]}>
-                Identify at the Shelf
+                Scan at the Shelf
               </Text>
               <Text style={[styles.stepBody, { color: colors.textSecondary }]}>
-                Point your phone camera at any standard retail barcode in the aisle or search the database by product and brand.
+                Point your phone camera at any standard retail barcode in the aisle, or search the catalogue by product and brand.
               </Text>
             </View>
 
@@ -240,10 +260,10 @@ export default function LandingPage() {
                 <Text style={[styles.stepNumText, { color: colors.accent }]}>02</Text>
               </View>
               <Text style={[styles.stepTitle, { color: colors.text }]}>
-                Compare Verified Offers
+                Compare Retailers
               </Text>
               <Text style={[styles.stepBody, { color: colors.textSecondary }]}>
-                Review recorded retailer pricing and delivery options side by side in a calm, clear interface before you commit.
+                Open verified outbound search links across quick commerce and marketplaces to check live pricing and stock.
               </Text>
             </View>
 
@@ -252,10 +272,10 @@ export default function LandingPage() {
                 <Text style={[styles.stepNumText, { color: colors.accent }]}>03</Text>
               </View>
               <Text style={[styles.stepTitle, { color: colors.text }]}>
-                Decide Before Checkout
+                Plan Your Trip
               </Text>
               <Text style={[styles.stepBody, { color: colors.textSecondary }]}>
-                Build your shopping list, calculate your projected spend, and decide which items belong in your basket today.
+                Organize your items into an active shopping trip checklist, adjust quantities, and decide what to buy before checkout.
               </Text>
             </View>
           </View>
@@ -344,17 +364,126 @@ export default function LandingPage() {
           </View>
           <View style={styles.trustCopy}>
             <Text style={[styles.trustTitle, { color: colors.text }]}>
-              Verified Database Pricing
+              Honest Data Policy
             </Text>
             <Text style={[styles.trustBody, { color: colors.textSecondary }]}>
-              ShopTrip presents product offers recorded in our PostgreSQL database. We do not
-              fabricate discounts or present simulated figures as real-time market data.
+              ShopTrip shows outbound retailer links and catalogue metadata sourced from Open Food Facts. Live prices require direct retailer access. We do not fabricate or scrape prices.
             </Text>
           </View>
         </View>
 
         {/* ==================================================================== */}
-        {/* 6. FINAL CALL TO ACTION (CTA)                                        */}
+        {/* 6. COMING SOON — FUTURE ROADMAP                                      */}
+        {/* ==================================================================== */}
+        <View style={styles.sectionBlock}>
+          <View style={[styles.roadmapPillHeader, { backgroundColor: isDark ? 'rgba(216, 242, 138, 0.15)' : 'rgba(38, 77, 59, 0.12)' }]}>
+            <Text style={[styles.roadmapEyebrow, { color: isDark ? colors.accent : colors.primaryDark }]}>
+              PLANNED · FUTURE ROADMAP
+            </Text>
+          </View>
+          <Text style={[styles.sectionHeading, { color: colors.text }]}>
+            What&apos;s next for ShopTrip
+          </Text>
+
+          <View style={[styles.roadmapGrid, isWide && styles.roadmapGridWide]}>
+            {/* Feature A: Healthy Bite */}
+            <View
+              style={[
+                styles.roadmapCard,
+                { backgroundColor: colors.card, borderColor: colors.cardBorder },
+              ]}
+            >
+              <View style={[styles.roadmapStatusPill, { backgroundColor: isDark ? '#1C2C24' : '#EAF3EC' }]}>
+                <Text style={[styles.roadmapStatusText, { color: isDark ? colors.accent : colors.primaryDark }]}>
+                  COMING SOON · NUTRITION RANKING
+                </Text>
+              </View>
+
+              <Text style={[styles.roadmapTitle, { color: colors.text }]}>
+                Healthy Bite
+              </Text>
+              <Text style={[styles.roadmapSummary, { color: colors.textSecondary }]}>
+                Discover better alternatives to everyday snacks, with nutrition taking priority over price.
+              </Text>
+
+              <View style={styles.roadmapBulletList}>
+                <View style={styles.roadmapBulletRow}>
+                  <Text style={[styles.roadmapBulletDot, { color: colors.accent }]}>•</Text>
+                  <Text style={[styles.roadmapBulletText, { color: colors.textSecondary }]}>
+                    <Text style={{ fontWeight: '700', color: colors.text }}>Category Alternatives: </Text>
+                    Viewing snacks like Lay&apos;s or Kurkure will suggest higher-quality alternatives within the same category (e.g. baked chips, roasted snacks, protein-conscious options).
+                  </Text>
+                </View>
+                <View style={styles.roadmapBulletRow}>
+                  <Text style={[styles.roadmapBulletDot, { color: colors.accent }]}>•</Text>
+                  <Text style={[styles.roadmapBulletText, { color: colors.textSecondary }]}>
+                    <Text style={{ fontWeight: '700', color: colors.text }}>Nutrition-First Scoring: </Text>
+                    Rankings prioritize protein, saturated fats, sodium, disclosed additives, oil types, and preparation methods (baked vs fried).
+                  </Text>
+                </View>
+                <View style={styles.roadmapBulletRow}>
+                  <Text style={[styles.roadmapBulletDot, { color: colors.accent }]}>•</Text>
+                  <Text style={[styles.roadmapBulletText, { color: colors.textSecondary }]}>
+                    <Text style={{ fontWeight: '700', color: colors.text }}>Evidence-Based Guidance: </Text>
+                    Transparent ratings based on published label disclosures with comparable serving sizes, providing consumer guidance without medical claims.
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Feature B: Smart Trip Planner */}
+            <View
+              style={[
+                styles.roadmapCard,
+                { backgroundColor: colors.card, borderColor: colors.cardBorder },
+              ]}
+            >
+              <View style={[styles.roadmapStatusPill, { backgroundColor: isDark ? '#1C2C24' : '#EAF3EC' }]}>
+                <Text style={[styles.roadmapStatusText, { color: isDark ? colors.accent : colors.primaryDark }]}>
+                  COMING SOON · BUDGET CONTROL
+                </Text>
+              </View>
+
+              <Text style={[styles.roadmapTitle, { color: colors.text }]}>
+                Smart Trip Planner
+              </Text>
+              <Text style={[styles.roadmapSummary, { color: colors.textSecondary }]}>
+                Plan your shopping list before you leave, compare options and stay in control of your budget.
+              </Text>
+
+              <View style={styles.roadmapBulletList}>
+                <View style={styles.roadmapBulletRow}>
+                  <Text style={[styles.roadmapBulletDot, { color: colors.accent }]}>•</Text>
+                  <Text style={[styles.roadmapBulletText, { color: colors.textSecondary }]}>
+                    <Text style={{ fontWeight: '700', color: colors.text }}>Pre-Trip Budgeting: </Text>
+                    Set a target budget before visiting a supermarket, local mart, or kirana store, comparing planned spend against verified prices.
+                  </Text>
+                </View>
+                <View style={styles.roadmapBulletRow}>
+                  <Text style={[styles.roadmapBulletDot, { color: colors.accent }]}>•</Text>
+                  <Text style={[styles.roadmapBulletText, { color: colors.textSecondary }]}>
+                    <Text style={{ fontWeight: '700', color: colors.text }}>Price Threshold Decisions: </Text>
+                    Buy in-store when prices are favorable; otherwise route to online quick-commerce or marketplace options.
+                  </Text>
+                </View>
+                <View style={styles.roadmapBulletRow}>
+                  <Text style={[styles.roadmapBulletDot, { color: colors.accent }]}>•</Text>
+                  <Text style={[styles.roadmapBulletText, { color: colors.textSecondary }]}>
+                    <Text style={{ fontWeight: '700', color: colors.text }}>Essentials & Contingency: </Text>
+                    Categorise purchases into essentials vs optional with a 10–20% contingency alert if your basket exceeds the planned ceiling.
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          <Text style={[styles.roadmapDisclaimer, { color: colors.textMuted }]}>
+            Planned future capabilities. The current release focuses on barcode scanning, multi-retailer search links, and active shopping trip organization. Nutritional analysis and budget models are not active in this prototype.
+          </Text>
+        </View>
+
+        {/* ==================================================================== */}
+        {/* 7. FINAL CALL TO ACTION (CTA)                                        */}
         {/* ==================================================================== */}
         <View
           style={[
@@ -391,12 +520,148 @@ export default function LandingPage() {
         {/* 7. FOOTER                                                            */}
         {/* ==================================================================== */}
         <View style={[styles.footer, { borderTopColor: colors.border }]}>
-          <ShopTripLogo size="sm" />
-          <Text style={[styles.footerText, { color: colors.textMuted }]}>
-            © 2026 ShopTrip. Built for smart, informed shopping.
-          </Text>
+          <View style={styles.footerBrandRow}>
+            <ShopTripLogo size="sm" />
+            <Text style={[styles.footerText, { color: colors.textMuted }]}>
+              © 2026 ShopTrip · Built for smart, informed shopping.
+            </Text>
+          </View>
+
+          <View style={styles.footerLinksRow}>
+            <Pressable
+              onPress={handleContactUs}
+              accessibilityRole="link"
+              accessibilityLabel="Contact ShopTrip Support"
+            >
+              <Text style={[styles.footerLinkText, { color: colors.textSecondary }]}>
+                Contact Us
+              </Text>
+            </Pressable>
+
+            <Text style={[styles.footerLinkDot, { color: colors.textMuted }]}>·</Text>
+
+            <Pressable
+              onPress={() => setActiveModal('privacy')}
+              accessibilityRole="link"
+              accessibilityLabel="Privacy Policy"
+            >
+              <Text style={[styles.footerLinkText, { color: colors.textSecondary }]}>
+                Privacy Policy
+              </Text>
+            </Pressable>
+
+            <Text style={[styles.footerLinkDot, { color: colors.textMuted }]}>·</Text>
+
+            <Pressable
+              onPress={() => setActiveModal('terms')}
+              accessibilityRole="link"
+              accessibilityLabel="Terms of Service"
+            >
+              <Text style={[styles.footerLinkText, { color: colors.textSecondary }]}>
+                Terms of Service
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </ScrollView>
+
+      {/* POLICY & TERMS MODAL */}
+      <Modal
+        visible={activeModal !== null}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setActiveModal(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.policyModalContent,
+              { backgroundColor: colors.card, borderColor: colors.cardBorder },
+            ]}
+          >
+            <View style={styles.policyModalHeader}>
+              <Text style={[styles.policyModalTitle, { color: colors.text }]}>
+                {activeModal === 'privacy' ? 'Privacy Policy' : 'Terms of Service'}
+              </Text>
+              <Pressable
+                style={[styles.closeModalBtn, { backgroundColor: colors.chipBg }]}
+                onPress={() => setActiveModal(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Close dialog"
+              >
+                <Text style={[styles.closeModalText, { color: colors.chipText }]}>✕</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView style={styles.policyModalBody} showsVerticalScrollIndicator={true}>
+              {activeModal === 'privacy' ? (
+                <View style={styles.policyTextGroup}>
+                  <Text style={[styles.policySubheading, { color: colors.text }]}>
+                    1. Data Storage & Privacy
+                  </Text>
+                  <Text style={[styles.policyParagraph, { color: colors.textSecondary }]}>
+                    ShopTrip is designed with privacy as a foundational principle. In guest mode, your shopping trip items and entered shelf prices are stored exclusively in your local browser or device storage (`AsyncStorage`). No personally identifiable information is collected or sold.
+                  </Text>
+
+                  <Text style={[styles.policySubheading, { color: colors.text }]}>
+                    2. Product Lookups & Metadata
+                  </Text>
+                  <Text style={[styles.policyParagraph, { color: colors.textSecondary }]}>
+                    Barcode scans and product searches are matched against our verified catalogue and the public Open Food Facts database under the Open Database License (ODbL). No tracking pixels or advertising telemetry monitor your searches.
+                  </Text>
+
+                  <Text style={[styles.policySubheading, { color: colors.text }]}>
+                    3. External Retailer Links
+                  </Text>
+                  <Text style={[styles.policyParagraph, { color: colors.textSecondary }]}>
+                    When you tap to open an external merchant page (such as Blinkit, Zepto, Amazon, or BigBasket), you are redirected directly to that retailer&apos;s website or app. ShopTrip does not scrape user credentials or track user checkout activity on third-party sites.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.policyTextGroup}>
+                  <Text style={[styles.policySubheading, { color: colors.text }]}>
+                    1. Product & Price Comparison
+                  </Text>
+                  <Text style={[styles.policyParagraph, { color: colors.textSecondary }]}>
+                    ShopTrip provides grocery product discovery, shelf price logging, and outbound search links to popular Indian retailers. Unless explicitly labeled as a verified database offer, online prices and availability are determined by each retailer&apos;s dark store, local inventory, and delivery address.
+                  </Text>
+
+                  <Text style={[styles.policySubheading, { color: colors.text }]}>
+                    2. User Shelf Prices & Savings
+                  </Text>
+                  <Text style={[styles.policyParagraph, { color: colors.textSecondary }]}>
+                    Projected savings are calculated based on user-entered in-store shelf tags compared against comparable verified online offers. ShopTrip does not guarantee external merchant stock or prices at final checkout.
+                  </Text>
+
+                  <Text style={[styles.policySubheading, { color: colors.text }]}>
+                    3. Open Food Facts Attribution
+                  </Text>
+                  <Text style={[styles.policyParagraph, { color: colors.textSecondary }]}>
+                    Product metadata is partially derived from Open Food Facts contributors under ODbL. Catalogue presence does not imply live stock or partnership with manufacturers.
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+
+            <Pressable
+              style={[
+                styles.modalDoneBtn,
+                { backgroundColor: isDark ? colors.accent : colors.primaryDark },
+              ]}
+              onPress={() => setActiveModal(null)}
+            >
+              <Text
+                style={[
+                  styles.modalDoneText,
+                  { color: isDark ? colors.accentText : '#FFFFFF' },
+                ]}
+              >
+                Done
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -412,8 +677,8 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   scrollContainerWide: {
-    maxWidth: 1040,
-    paddingHorizontal: 32,
+    maxWidth: 1380,
+    paddingHorizontal: 40,
   },
 
   /* NAVBAR */
@@ -514,6 +779,9 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  primaryCtaIcon: {
+    fontSize: 16,
+  },
   primaryCtaText: {
     fontSize: 15,
     fontWeight: '800',
@@ -548,6 +816,17 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 18,
     gap: 12,
+  },
+  previewTagPill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  previewTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.8,
   },
   scannerBadge: {
     borderRadius: 16,
@@ -790,6 +1069,80 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+  /* ROADMAP COMING SOON */
+  roadmapPillHeader: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    marginBottom: 10,
+  },
+  roadmapEyebrow: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+  },
+  roadmapGrid: {
+    gap: 16,
+  },
+  roadmapGridWide: {
+    flexDirection: 'row',
+  },
+  roadmapCard: {
+    flex: 1,
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    gap: 12,
+  },
+  roadmapStatusPill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  roadmapStatusText: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  roadmapTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+  roadmapSummary: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '600',
+  },
+  roadmapBulletList: {
+    gap: 8,
+    marginTop: 4,
+  },
+  roadmapBulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  roadmapBulletDot: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '800',
+  },
+  roadmapBulletText: {
+    fontSize: 12,
+    lineHeight: 18,
+    flex: 1,
+  },
+  roadmapDisclaimer: {
+    marginTop: 16,
+    fontSize: 11,
+    lineHeight: 16,
+    textAlign: 'center',
+    paddingHorizontal: 16,
+  },
+
   /* FINAL CTA */
   finalCtaCard: {
     marginTop: 48,
@@ -847,9 +1200,100 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     flexWrap: 'wrap',
+    gap: 16,
+  },
+  footerBrandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
+    flexWrap: 'wrap',
   },
   footerText: {
     fontSize: 11,
+  },
+  footerLinksRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  footerLinkText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  footerLinkDot: {
+    fontSize: 12,
+  },
+
+  /* POLICY & TERMS MODAL */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  policyModalContent: {
+    width: '100%',
+    maxWidth: 640,
+    maxHeight: '80%',
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  policyModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.06)',
+  },
+  policyModalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+  closeModalBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeModalText: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  policyModalBody: {
+    marginBottom: 20,
+  },
+  policyTextGroup: {
+    gap: 14,
+    paddingVertical: 4,
+  },
+  policySubheading: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  policyParagraph: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  modalDoneBtn: {
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalDoneText: {
+    fontSize: 13,
+    fontWeight: '800',
   },
 });

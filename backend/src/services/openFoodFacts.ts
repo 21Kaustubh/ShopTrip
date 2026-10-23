@@ -7,7 +7,6 @@
  * And the official OFF full-text Search service (Search-a-licious)
  * combined with targeted Indian market category retrieval:
  *   https://search.openfoodfacts.org/search?q=<query>&page_size=<n>
- *   https://world.openfoodfacts.net/api/v2/search?...&countries_tags_en=india
  *
  * Attribution: Product information sourced from Open Food Facts
  * (https://world.openfoodfacts.org), an open, collaborative database
@@ -26,7 +25,6 @@ import {
 
 const OFF_BASE = 'https://world.openfoodfacts.org';
 const OFF_SEARCH_BASE = 'https://search.openfoodfacts.org';
-const OFF_V2_BASE = 'https://world.openfoodfacts.net';
 const USER_AGENT = 'ShopTrip/0.1 (https://github.com/21Kaustubh/ShopTrip)';
 const REQUEST_TIMEOUT_MS = 10_000;
 const SEARCH_TIMEOUT_MS = 14_000;
@@ -206,36 +204,36 @@ export async function searchOffCatalogue(
       })
   );
 
-  // 2. If phonetic expansion exists (e.g. "brew coffee" -> "bru coffee"), query expanded term
+  // 2. If phonetic / synonym expansion exists (e.g. "brew coffee" -> "bru coffee"), query expanded term
   if (expandedTerms.length > 0) {
-    fetches.push(
-      fetch(`${OFF_SEARCH_BASE}/search?q=${encodeURIComponent(expandedTerms[0])}&page_size=20`, {
-        headers: makeHeaders(),
-        signal: withTimeout(SEARCH_TIMEOUT_MS),
-      })
-        .then((r) => (r.ok ? (r.json() as Promise<{ hits?: OffRawProduct[]; products?: OffRawProduct[] }>) : null))
-        .catch(() => null)
-    );
+    for (const term of expandedTerms.slice(0, 2)) {
+      fetches.push(
+        fetch(`${OFF_SEARCH_BASE}/search?q=${encodeURIComponent(term)}&page_size=20`, {
+          headers: makeHeaders(),
+          signal: withTimeout(SEARCH_TIMEOUT_MS),
+        })
+          .then((r) => (r.ok ? (r.json() as Promise<{ hits?: OffRawProduct[]; products?: OffRawProduct[] }>) : null))
+          .catch(() => null)
+      );
+    }
   }
 
-  // 3. If category is recognized, query India-specific products for that category on v2
-  if (category && category.tags.length > 0) {
-    const categoryTag = category.tags[0].replace(/^en:/, '');
-    const v2Url = `${OFF_V2_BASE}/api/v2/search?categories_tags_en=${encodeURIComponent(
-      categoryTag
-    )}&countries_tags_en=india&fields=${PRODUCT_FIELDS}&page_size=25`;
-
-    fetches.push(
-      fetch(v2Url, {
-        headers: makeHeaders(),
-        signal: withTimeout(SEARCH_TIMEOUT_MS),
-      })
-        .then((r) => (r.ok ? (r.json() as Promise<{ hits?: OffRawProduct[]; products?: OffRawProduct[] }>) : null))
-        .catch((err) => {
-          console.warn(`[OFF] India category search failed for "${categoryTag}":`, err?.message || err);
-          return null;
-        })
-    );
+  // 3. If category is recognized, pull in top Indian market brands for that category on Search-a-licious
+  if (category && category.priorityBrands.length > 0) {
+    const keyBrands = category.priorityBrands.slice(0, 2);
+    for (const b of keyBrands) {
+      const brandQuery = `${b} ${category.categoryKeyword}`;
+      if (brandQuery.toLowerCase() !== primary) {
+        fetches.push(
+          fetch(`${OFF_SEARCH_BASE}/search?q=${encodeURIComponent(brandQuery)}&page_size=15`, {
+            headers: makeHeaders(),
+            signal: withTimeout(SEARCH_TIMEOUT_MS),
+          })
+            .then((r) => (r.ok ? (r.json() as Promise<{ hits?: OffRawProduct[]; products?: OffRawProduct[] }>) : null))
+            .catch(() => null)
+        );
+      }
+    }
   }
 
   const responses = await Promise.all(fetches);
@@ -301,7 +299,7 @@ export async function searchOffCatalogue(
     // Return combined results: India-relevant first, then international
     results = sorted.slice(0, limit);
   } else {
-    // India-only default mode: only show confirmed or likely India products
+    // India-first default mode: only show confirmed or likely India products
     results = indiaResults.slice(0, limit);
   }
 

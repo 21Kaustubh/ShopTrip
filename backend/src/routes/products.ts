@@ -1,6 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../prisma.js';
 import { fetchProductByBarcode, searchOffCatalogue } from '../services/openFoodFacts.js';
+import {
+  buildRetailerComparison,
+  REGISTERED_RETAILER_ADAPTERS,
+} from '../services/retailerAdapters.js';
 
 export const productsRouter = Router();
 
@@ -104,6 +108,17 @@ productsRouter.get('/barcode/:barcode', async (req: Request, res: Response): Pro
     });
 
     if (localProduct) {
+      const comparison = buildRetailerComparison(
+        {
+          barcode: localProduct.barcode,
+          productName: localProduct.productName,
+          brand: localProduct.brand,
+          sizeInfo: localProduct.sizeInfo,
+          category: localProduct.category?.name || 'General',
+        },
+        localProduct.offers
+      );
+
       res.json({
         found: true,
         source: 'local',
@@ -129,6 +144,7 @@ productsRouter.get('/barcode/:barcode', async (req: Request, res: Response): Pro
           source: offer.source,
           lastChecked: offer.lastChecked,
         })),
+        comparison,
       });
       return;
     }
@@ -149,6 +165,17 @@ productsRouter.get('/barcode/:barcode', async (req: Request, res: Response): Pro
     // ── 3. Persist and return ─────────────────────────────────────────────
     const saved = await persistOffProduct(offProduct);
     const productToReturn = saved ?? offProduct; // fall back to OFF data if DB write failed
+    // Catalogue import persists product metadata into local catalogue; retailer comparison remains based on verified offers or outbound search
+    const comparison = buildRetailerComparison(
+      {
+        barcode: offProduct.barcode,
+        productName: offProduct.productName,
+        brand: offProduct.brand,
+        sizeInfo: offProduct.sizeInfo,
+        category: offProduct.category,
+      },
+      []
+    );
 
     res.json({
       found: true,
@@ -167,6 +194,7 @@ productsRouter.get('/barcode/:barcode', async (req: Request, res: Response): Pro
         updatedAt: (productToReturn as { updatedAt?: Date } | null)?.updatedAt ?? new Date(),
       },
       offers: [], // No retailer offers from OFF — only verified local offers shown
+      comparison,
     });
   } catch (error) {
     console.error('Barcode lookup error:', error);
@@ -305,5 +333,95 @@ productsRouter.get('/:id/offers', async (req: Request, res: Response): Promise<v
   } catch (error) {
     console.error('Get offers error:', error);
     res.status(500).json({ error: 'ServerError', message: 'Failed to retrieve retailer offers.' });
+  }
+});
+
+/*
+ * GET /api/products/retailers
+ * Returns the configurable registry of registered Indian retailers and their capabilities.
+ */
+productsRouter.get('/retailers', (_req: Request, res: Response): void => {
+  const retailers = REGISTERED_RETAILER_ADAPTERS.map((adapter) => ({
+    id: adapter.id,
+    name: adapter.name,
+    displayName: adapter.displayName,
+    platformType: adapter.platformType,
+    homeUrl: adapter.homeUrl,
+    isLiveApiConfigured: adapter.isLiveApiConfigured(),
+    partnerStatusNote: adapter.getPartnerStatusNote(),
+    actionLabel: adapter.getOutboundActionLabel(),
+  }));
+
+  res.json({
+    retailers,
+    count: retailers.length,
+    liveActiveCount: retailers.filter((r) => r.isLiveApiConfigured).length,
+  });
+});
+
+/*
+ * GET /api/products/:barcode/comparison
+ * Returns transparent multi-retailer comparison with verified offers and outbound search links.
+ */
+productsRouter.get('/:barcode/comparison', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const rawBarcode = req.params.barcode;
+    const barcode = rawBarcode ? rawBarcode.trim() : '';
+
+    if (!barcode) {
+      res.status(400).json({ error: 'ValidationError', message: 'A barcode is required.' });
+      return;
+    }
+
+    // 1. Check local DB
+    const localProduct = await prisma.product.findUnique({
+      where: { barcode },
+      include: {
+        category: true,
+        offers: {
+          where: { retailer: { isActive: true } },
+          include: { retailer: true },
+          orderBy: { price: 'asc' },
+        },
+      },
+    });
+
+    if (localProduct) {
+      const comparison = buildRetailerComparison(
+        {
+          barcode: localProduct.barcode,
+          productName: localProduct.productName,
+          brand: localProduct.brand,
+          sizeInfo: localProduct.sizeInfo,
+          category: localProduct.category?.name || 'General',
+        },
+        localProduct.offers
+      );
+      res.json(comparison);
+      return;
+    }
+
+    // 2. Fall back to Open Food Facts
+    const offProduct = await fetchProductByBarcode(barcode);
+    if (!offProduct) {
+      res.status(404).json({ error: 'NotFound', message: 'Product not found.' });
+      return;
+    }
+
+    const comparison = buildRetailerComparison(
+      {
+        barcode: offProduct.barcode,
+        productName: offProduct.productName,
+        brand: offProduct.brand,
+        sizeInfo: offProduct.sizeInfo,
+        category: offProduct.category,
+      },
+      []
+    );
+
+    res.json(comparison);
+  } catch (error) {
+    console.error('Product comparison error:', error);
+    res.status(500).json({ error: 'ServerError', message: 'Failed to build product comparison.' });
   }
 });
